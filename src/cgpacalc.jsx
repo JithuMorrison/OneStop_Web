@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 
 const gradePoints = {
@@ -8,7 +8,7 @@ const gradePoints = {
   'B+': 7,
   'B': 6,
   'C+': 5,
-  'C' : 4,
+  'C': 4,
   'D+': 3,
   'D': 2,
   'W': 1
@@ -39,78 +39,87 @@ export default function CgpaCalc() {
   const calculateCGPA = () => {
     let totalCredits = 0;
     let totalPoints = 0;
-  
+
     subjects.forEach(([sub, credits]) => {
       const grade = grades[sub];
       if (grade && gradePoints[grade] !== undefined) {
-        totalPoints += gradePoints[grade] * credits;
+        totalPoints += gradePoints[grade] * parseInt(credits);
         totalCredits += parseInt(credits);
       }
     });
-  
+
     if (totalCredits > 0) {
       const cgpaValue = totalPoints / totalCredits;
       setCgpa(cgpaValue.toFixed(2));
     }
-  };  
+  };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">CGPA Calculator</h1>
+    <div className="min-h-screen bg-gradient-to-br from-violet-700 via-purple-600 to-indigo-700 text-white flex items-center justify-center p-4">
+      <div className="bg-white bg-opacity-10 backdrop-blur-md rounded-2xl shadow-xl p-8 max-w-3xl w-full">
+        <h1 className="text-4xl font-extrabold text-center mb-8 tracking-wide text-white drop-shadow-lg">
+          🎓 CGPA Calculator
+        </h1>
 
-      <div className="flex gap-4 mb-4">
-        <select onChange={e => setSem(e.target.value)} className="border p-2">
-          <option value="">Select Semester</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-          {/* Add more */}
-        </select>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <select onChange={e => setSem(e.target.value)} className="bg-white/20 backdrop-blur-md text-white border border-white/30 p-3 rounded-lg focus:outline-none">
+            <option value="">Select Semester</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
 
-        <select onChange={e => setDept(e.target.value)} className="border p-2">
-          <option value="">Select Department</option>
-          <option value="CSE">CSE</option>
-          <option value="ECE">ECE</option>
-          {/* Add more */}
-        </select>
+          <select onChange={e => setDept(e.target.value)} className="bg-white/20 backdrop-blur-md text-white border border-white/30 p-3 rounded-lg focus:outline-none">
+            <option value="">Select Department</option>
+            <option value="CSE">CSE</option>
+            <option value="ECE">ECE</option>
+          </select>
 
-        <button onClick={handleFetch} className="bg-blue-500 text-white px-4 py-2 rounded">
-          Load Subjects
-        </button>
-      </div>
+          <button
+            onClick={handleFetch}
+            className="bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white font-semibold py-3 rounded-lg shadow-md transition-transform transform hover:scale-105"
+          >
+            Load Subjects
+          </button>
+        </div>
 
-      {subjects.length > 0 && (
-        <div className="mb-4">
-          {subjects.map(([subject, credits]) => (
-            <div key={subject} className="flex justify-between items-center mb-2">
-              <div>
-                {subject.toUpperCase()} ({credits} credits)
+        {subjects.length > 0 && (
+          <div className="space-y-4 mb-6">
+            {subjects.map(([subject, credits]) => (
+              <div key={subject} className="flex justify-between items-center border-b border-white/20 pb-2">
+                <div className="text-lg font-medium">
+                  {subject.toUpperCase()} <span className="text-white/60">({credits} credits)</span>
+                </div>
+                <select
+                  onChange={e => handleGradeChange(subject, e.target.value)}
+                  className="bg-white/20 backdrop-blur-md text-white border border-white/30 p-2 rounded-lg focus:outline-none"
+                >
+                  <option value="">Select Grade</option>
+                  {Object.keys(gradePoints).map(grade => (
+                    <option key={grade} value={grade}>{grade}</option>
+                  ))}
+                </select>
               </div>
-              <select
-                onChange={e => handleGradeChange(subject, e.target.value)}
-                className="border p-2"
-              >
-                <option value="">Select Grade</option>
-                {Object.keys(gradePoints).map(grade => (
-                  <option key={grade} value={grade}>{grade}</option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <button
-        onClick={calculateCGPA}
-        className="bg-green-600 text-white px-4 py-2 rounded"
-      >
-        Calculate CGPA
-      </button>
+        {subjects.length > 0 && (
+          <div className="text-center">
+            <button
+              onClick={calculateCGPA}
+              className="bg-gradient-to-r from-green-400 to-lime-500 hover:from-green-500 hover:to-lime-600 text-white font-semibold px-6 py-3 rounded-full shadow-lg transition-transform transform hover:scale-105"
+            >
+              🚀 Calculate CGPA
+            </button>
+          </div>
+        )}
 
-      {cgpa && (
-        <div className="mt-4 text-xl">
-          Your CGPA is: <strong>{cgpa}</strong>
-        </div>
-      )}
+        {cgpa && (
+          <div className="mt-8 text-center text-3xl font-bold text-white bg-white/20 px-6 py-4 rounded-xl shadow-inner">
+            Your CGPA is: <span className="text-yellow-300">{cgpa}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

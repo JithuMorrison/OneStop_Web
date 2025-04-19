@@ -103,6 +103,23 @@ const Dashboard = () => {
             </li>
             <li style={{ marginBottom: '0.5rem' }}>
               <button 
+                onClick={() => navigate('/cgpa')}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 12px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background 0.2s ease'
+                }}
+              >
+                Calculate CGPA
+              </button>
+            </li>
+            <li style={{ marginBottom: '0.5rem' }}>
+              <button 
                 onClick={() => navigate('/profile')}
                 style={{
                   width: '100%',

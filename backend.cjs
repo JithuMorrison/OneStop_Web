@@ -38,6 +38,37 @@ const UserSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', UserSchema);
 
+const ChatSchema = new mongoose.Schema({
+  participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  messages: [{
+    sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    content: String,
+    timestamp: { type: Date, default: Date.now, index: { expires: '10h' } } // Auto-delete after 10 hours
+  }]
+});
+
+const Chat = mongoose.model('Chat', ChatSchema);
+
+const Schema = new mongoose.Schema({
+  sem: String,
+  dept: String,
+  subjects: [[String, Number]]
+}, { collection: 'cgpa' }); // specify the collection name
+
+// Define model
+const CgpaModel = mongoose.model('Cgpa', Schema);
+
+// API to get subjects by sem and dept
+app.get('/api/subjects', async (req, res) => {
+  try {
+    const { sem, dept } = req.query;
+    const data = await CgpaModel.findOne({ sem, dept });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch data' });
+  }
+});
+
 // Middleware to verify JWT
 const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -204,6 +235,65 @@ app.get('/api/search', authenticate, async (req, res) => {
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+app.get('/api/chat/:userId', authenticate, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUserId = req.userId;
+
+    // Find existing chat
+    let chat = await Chat.findOne({
+      participants: { $all: [currentUserId, userId] }
+    }).populate('participants', 'username');
+
+    // Create new chat if doesn't exist
+    if (!chat) {
+      chat = new Chat({
+        participants: [currentUserId, userId]
+      });
+      await chat.save();
+    }
+
+    res.json(chat);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get chat' });
+  }
+});
+
+// Send message
+app.post('/api/chat/:chatId/message', authenticate, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { content } = req.body;
+
+    const chat = await Chat.findByIdAndUpdate(chatId, {
+      $push: {
+        messages: {
+          sender: req.userId,
+          content
+        }
+      }
+    }, { new: true });
+
+    res.json(chat);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Get chat messages
+app.get('/api/chat/:chatId/messages', authenticate, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const chat = await Chat.findById(chatId)
+      .populate('messages.sender', 'username')
+      .populate('participants', 'username');
+
+    res.json(chat);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get messages' });
   }
 });
 

@@ -5,6 +5,7 @@ import Dashboard from './Dashboard';
 import Profile from './profile';
 import Search from './search';
 import CgpaCalc from './cgpacalc';
+import AdminDashboard from './admindash';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -53,7 +54,8 @@ const App = () => {
           path="/" 
           element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} 
         />
-        <Route path='/cgpa' element={<CgpaCalc/>} />
+        <Route path='/cgpa' element={<CgpaCalc />} />
+        <Route path='/admindash' element={<AdminDashboard />} />
       </Routes>
     </Router>
   );

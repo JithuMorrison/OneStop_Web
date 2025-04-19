@@ -90,7 +90,7 @@ export default function CgpaCalc() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-800 text-white flex items-center justify-center p-4">
-      <div className="bg-white/5 backdrop-blur-lg rounded-3xl shadow-2xl p-8 max-w-4xl w-full border border-white/10">
+      <div className="bg-white/5 backdrop-blur-lg rounded-3xl shadow-2xl p-8 max-w-4xl w-full border border-white/10 mt-4">
         {/* Header with animated gradient text */}
         <div className="text-center mb-10">
           <h1 className="text-5xl font-bold mb-2">
@@ -273,7 +273,7 @@ export default function CgpaCalc() {
 
         {/* Footer */}
         <div className="mt-10 text-center text-sm text-white/50">
-          <p>Made with ❤️ for students | CGPA Calculator v2.0</p>
+          <p>Made with ❤️ for students | CGPA Calculator v1.0</p>
         </div>
       </div>
     </div>

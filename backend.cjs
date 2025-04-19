@@ -297,5 +297,21 @@ app.get('/api/chat/:chatId/messages', authenticate, async (req, res) => {
   }
 });
 
+// Get all chats for current user
+app.get('/api/chats', authenticate, async (req, res) => {
+  try {
+    const chats = await Chat.find({
+      participants: req.userId
+    })
+    .populate('participants', 'username email')
+    .populate('messages.sender', 'username')
+    .sort({ updatedAt: -1 });
+
+    res.json(chats);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch chats' });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

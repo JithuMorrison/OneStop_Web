@@ -8,8 +8,31 @@ const Search = () => {
   const [activeChat, setActiveChat] = useState(null);
   const [message, setMessage] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
+  const [userChats, setUserChats] = useState([]);
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem('user'));
+
+  // Fetch user's chats when component mounts
+  useEffect(() => {
+    const fetchUserChats = async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/chats`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch chats');
+        
+        const chats = await response.json();
+        setUserChats(chats);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchUserChats();
+  }, [activeChat]); // Refresh when active chat changes
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -174,56 +197,110 @@ const Search = () => {
               </div>
             </form>
             
-            {results.length > 0 ? (
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {results.map(user => (
-                  <li 
-                    key={user._id}
-                    style={{
-                      padding: '1rem',
-                      borderBottom: '1px solid #eee',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <div>
-                      <h3 style={{ marginBottom: '0.25rem' }}>{user.username}</h3>
-                      <p style={{ color: '#666', fontSize: '14px' }}>{user.email}</p>
-                    </div>
-                    <div>
-                      <button
-                        onClick={() => navigate(`/profile/${user._id}`)}
+            {results.length > 0 && (
+              <div style={{ marginBottom: '2rem' }}>
+                <h3 style={{ marginBottom: '1rem', color: '#4A00E0' }}>Search Results</h3>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {results.map(user => (
+                    <li 
+                      key={user._id}
+                      style={{
+                        padding: '1rem',
+                        borderBottom: '1px solid #eee',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <h3 style={{ marginBottom: '0.25rem' }}>{user.username}</h3>
+                        <p style={{ color: '#666', fontSize: '14px' }}>{user.email}</p>
+                      </div>
+                      <div>
+                        <button
+                          onClick={() => navigate(`/profile/${user._id}`)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#4A00E0',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            marginRight: '0.5rem'
+                          }}
+                        >
+                          View Profile
+                        </button>
+                        <button
+                          onClick={() => startChat(user._id)}
+                          style={{
+                            padding: '8px 16px',
+                            backgroundColor: '#2E7D32',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Message
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {userChats.length > 0 && (
+              <div>
+                <h3 style={{ marginBottom: '1rem', color: '#4A00E0' }}>Your Chats</h3>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  {userChats.map(chat => {
+                    const otherUser = getOtherParticipant(chat);
+                    if (!otherUser) return null;
+                    
+                    return (
+                      <li 
+                        key={chat._id}
                         style={{
-                          padding: '8px 16px',
-                          backgroundColor: '#4A00E0',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
+                          padding: '1rem',
+                          borderBottom: '1px solid #eee',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
                           cursor: 'pointer',
-                          marginRight: '0.5rem'
+                          ':hover': {
+                            backgroundColor: '#f5f5f5'
+                          }
+                        }}
+                        onClick={() => {
+                          setActiveChat(chat);
+                          loadMessages(chat._id);
                         }}
                       >
-                        View Profile
-                      </button>
-                      <button
-                        onClick={() => startChat(user._id)}
-                        style={{
-                          padding: '8px 16px',
-                          backgroundColor: '#2E7D32',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Message
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
+                        <div>
+                          <h3 style={{ marginBottom: '0.25rem' }}>{otherUser.username}</h3>
+                          <p style={{ color: '#666', fontSize: '14px' }}>
+                            {chat.messages.length > 0 ? 
+                              chat.messages[chat.messages.length - 1].content : 
+                              'No messages yet'}
+                          </p>
+                        </div>
+                        <div>
+                          <span style={{ color: '#999', fontSize: '12px' }}>
+                            {chat.messages.length > 0 ? 
+                              new Date(chat.messages[chat.messages.length - 1].timestamp).toLocaleTimeString() : 
+                              ''}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {results.length === 0 && userChats.length === 0 && (
               <p style={{ color: '#666', textAlign: 'center' }}>
                 {query ? 'No users found' : 'Enter a search query to find users'}
               </p>
@@ -261,6 +338,9 @@ const Search = () => {
                         {msg.sender.username}
                       </div>
                       {msg.content}
+                      <div style={{ fontSize: '10px', marginTop: '4px' }}>
+                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      </div>
                     </div>
                   </div>
                 ))

@@ -24,7 +24,7 @@ const Login = ({ onLogin }) => {
     }
 
     try {
-      const endpoint = isRegistering ? '/api/register' : '/api/login';
+      const endpoint = isRegistering ? 'http://localhost:5000/api/register' : 'http://localhost:5000/api/login';
       const body = isRegistering ? { username, email, password } : { email, password };
       
       const response = await fetch(endpoint, {

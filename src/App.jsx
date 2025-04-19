@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './Login';
 import Dashboard from './Dashboard';
 import Profile from './profile';
+import Search from './search';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

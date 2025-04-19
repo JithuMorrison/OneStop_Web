@@ -10,11 +10,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+
+
+// ------------------------------------------------------------- Connect to MongoDB -----------------------------------------------------
+
+
 mongoose.connect(process.env.MONGOURL, {}).then(() => console.log("Connected to MongoDB"))
   .catch(err => console.error("MongoDB connection error:", err));
 
-// User Schema matching your format
+
+
+// ---------------------------------------------------------------  Schemas  -----------------------------------------------------------
+
+
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -58,6 +66,12 @@ const Schema = new mongoose.Schema({
 // Define model
 const CgpaModel = mongoose.model('Cgpa', Schema);
 
+
+
+// -------------------------------------------------------- API Codes ---------------------------------------------------------------
+
+
+// -------------------------------------------------------- CGPA -------------------------------------------------------------------
 // API to get subjects by sem and dept
 app.get('/api/subjects', async (req, res) => {
   try {
@@ -69,6 +83,8 @@ app.get('/api/subjects', async (req, res) => {
   }
 });
 
+
+// ------------------------------------------------------------- Login ---------------------------------------------------------------------
 // Middleware to verify JWT
 const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -173,6 +189,8 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// ------------------------------------------------------------ Profile  ----------------------------------------------------------------
+
 // Get user profile
 app.get('/api/user/:id', authenticate, async (req, res) => {
   try {
@@ -188,6 +206,8 @@ app.get('/api/user/:id', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
+
+// ----------------------------------------------------- Connect - Follow -----------------------------------------------------------------
 
 app.get('/api/user/:userId/following', authenticate, async (req, res) => {
   try {
@@ -289,6 +309,8 @@ app.get('/api/users/:userId/follows', authenticate, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------- Search Users -----------------------------------------------------------------
+
 // Search users
 app.get('/api/search', authenticate, async (req, res) => {
   try {
@@ -306,6 +328,8 @@ app.get('/api/search', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Search failed' });
   }
 });
+
+// ----------------------------------------------------- Chat Users ----------------------------------------------------------------------
 
 app.get('/api/chat/:userId', authenticate, async (req, res) => {
   try {
@@ -381,6 +405,8 @@ app.get('/api/chats', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 });
+
+// ----------------------------------------------------- API Listener -----------------------------------------------------------------
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

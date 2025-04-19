@@ -13,7 +13,7 @@ const Search = () => {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/search?query=${encodeURIComponent(query)}`, {
+      const response = await fetch(`http://localhost:5000/api/search?query=${encodeURIComponent(query)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

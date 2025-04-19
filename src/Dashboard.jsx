@@ -8,7 +8,7 @@ const Dashboard = () => {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
-      navigate('/login');
+        window.location.href = '/';
       return;
     }
     setUser(JSON.parse(storedUser));

@@ -189,34 +189,103 @@ app.get('/api/user/:id', authenticate, async (req, res) => {
   }
 });
 
-// Follow user
-app.post('/api/follow/:id', authenticate, async (req, res) => {
+app.get('/api/user/:userId/following', authenticate, async (req, res) => {
   try {
-    if (req.params.id === req.userId) {
+    const user = await User.findById(req.params.userId)
+      .select('following')
+      .populate('following', 'username name');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(user.following);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch following list' });
+  }
+});
+
+// Follow user
+app.post('/api/follow/:userId', authenticate, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const currentUserId = req.userId;
+
+    if (targetUserId === currentUserId) {
       return res.status(400).json({ error: 'Cannot follow yourself' });
     }
 
-    // Get current user
-    const currentUser = await User.findById(req.userId);
-    
     // Check if already following
-    if (currentUser.following.includes(req.params.id)) {
+    const currentUser = await User.findById(currentUserId);
+    if (currentUser.following.includes(targetUserId)) {
       return res.status(400).json({ error: 'Already following this user' });
     }
 
     // Add to following list
-    await User.findByIdAndUpdate(req.userId, {
-      $push: { following: req.params.id }
+    await User.findByIdAndUpdate(currentUserId, {
+      $push: { following: targetUserId }
     });
 
-    // Add to target user's followers count
-    await User.findByIdAndUpdate(req.params.id, {
+    // Increment target user's followers count
+    await User.findByIdAndUpdate(targetUserId, {
       $inc: { followers: 1 }
     });
 
     res.json({ message: 'Followed successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to follow user' });
+  }
+});
+
+// Unfollow user
+app.post('/api/unfollow/:userId', authenticate, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const currentUserId = req.userId;
+
+    if (targetUserId === currentUserId) {
+      return res.status(400).json({ error: 'Cannot unfollow yourself' });
+    }
+
+    // Check if not following
+    const currentUser = await User.findById(currentUserId);
+    if (!currentUser.following.includes(targetUserId)) {
+      return res.status(400).json({ error: 'Not following this user' });
+    }
+
+    // Remove from following list
+    await User.findByIdAndUpdate(currentUserId, {
+      $pull: { following: targetUserId }
+    });
+
+    // Decrement target user's followers count
+    await User.findByIdAndUpdate(targetUserId, {
+      $inc: { followers: -1 }
+    });
+
+    res.json({ message: 'Unfollowed successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to unfollow user' });
+  }
+});
+
+// Get user's followers and following data
+app.get('/api/users/:userId/follows', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId)
+      .select('followers following')
+      .populate('following', 'username name');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      followers: user.followers,
+      following: user.following
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch follow data' });
   }
 });
 

@@ -10,34 +10,52 @@ const Profile = () => {
   const currentUser = JSON.parse(localStorage.getItem('user'));
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchProfileData = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/user/${id || currentUser?.id}`, {
+        // Fetch the profile data
+        const profileResponse = await fetch(`http://localhost:5000/api/user/${id || currentUser?.id}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         });
         
-        if (!response.ok) {
+        if (!profileResponse.ok) {
           throw new Error('Failed to fetch profile');
         }
         
-        const data = await response.json();
-        setProfile(data);
-        setIsFollowing(data.following.includes(currentUser?.id));
-        setIsOwnProfile(data._id === currentUser?.id);
+        const profileData = await profileResponse.json();
+        setProfile(profileData);
+        setIsOwnProfile(profileData._id === currentUser?.id);
+
+        // Fetch current user's following list if viewing another profile
+        if (!isOwnProfile && currentUser?.id) {
+          const followResponse = await fetch(`http://localhost:5000/api/user/${currentUser.id}/following`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (followResponse.ok) {
+            const followingData = await followResponse.json();
+            setIsFollowing(followingData.some(user => user === profileData._id));
+          }
+        }
       } catch (err) {
         console.error(err);
         navigate('/login');
       }
     };
 
-    fetchProfile();
+    fetchProfileData();
   }, [id, currentUser?.id, navigate]);
 
   const handleFollow = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/follow/${profile._id}`, {
+      const endpoint = isFollowing 
+        ? `http://localhost:5000/api/unfollow/${profile._id}`
+        : `http://localhost:5000/api/follow/${profile._id}`;
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -46,30 +64,54 @@ const Profile = () => {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to follow user');
+        throw new Error(`Failed to ${isFollowing ? 'unfollow' : 'follow'} user`);
       }
       
-      // Update local state
-      if (isFollowing) {
-        setProfile(prev => ({
-          ...prev,
-          followers: prev.followers - 1
-        }));
-      } else {
-        setProfile(prev => ({
-          ...prev,
-          followers: prev.followers + 1
-        }));
-      }
-      
+      // Optimistically update UI
+      setProfile(prev => ({
+        ...prev,
+        followers: isFollowing ? prev.followers - 1 : prev.followers + 1
+      }));
       setIsFollowing(!isFollowing);
+
+      // Update localStorage follow data if available
+      const followData = JSON.parse(localStorage.getItem('followData')) || { following: [] };
+      let updatedFollowing;
+      
+      if (isFollowing) {
+        updatedFollowing = followData.following.filter(userId => userId !== profile._id);
+      } else {
+        updatedFollowing = [...followData.following, profile._id];
+      }
+      
+      localStorage.setItem('followData', JSON.stringify({
+        ...followData,
+        following: updatedFollowing
+      }));
+      
     } catch (err) {
       console.error(err);
+      // Revert UI changes if the operation failed
+      setProfile(prev => ({
+        ...prev,
+        followers: isFollowing ? prev.followers + 1 : prev.followers - 1
+      }));
+      setIsFollowing(isFollowing);
     }
   };
 
   if (!profile) {
-    return <div>Loading...</div>;
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Segoe UI, sans-serif'
+      }}>
+        <div>Loading profile...</div>
+      </div>
+    );
   }
 
   return (
@@ -96,7 +138,11 @@ const Profile = () => {
             color: 'white',
             border: 'none',
             borderRadius: '6px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            transition: 'background-color 0.2s',
+            ':hover': {
+              backgroundColor: '#3a00c0'
+            }
           }}
         >
           Back to Dashboard
@@ -126,13 +172,14 @@ const Profile = () => {
             justifyContent: 'center',
             fontSize: '36px',
             color: '#555',
-            marginRight: '2rem'
+            marginRight: '2rem',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
           }}>
             {profile.name.charAt(0).toUpperCase()}
           </div>
           
           <div>
-            <h2 style={{ fontSize: '28px', marginBottom: '0.5rem' }}>{profile.name}</h2>
+            <h2 style={{ fontSize: '28px', marginBottom: '0.5rem', color: '#333' }}>{profile.name}</h2>
             <p style={{ color: '#666', marginBottom: '0.25rem' }}>@{profile.username}</p>
             <p style={{ color: '#666', marginBottom: '1rem' }}>{profile.dept} - {profile.year} Year</p>
             
@@ -145,7 +192,11 @@ const Profile = () => {
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s',
+                  ':hover': {
+                    backgroundColor: isFollowing ? '#d62839' : '#3a00c0'
+                  }
                 }}
               >
                 {isFollowing ? 'Unfollow' : 'Follow'}
@@ -164,55 +215,62 @@ const Profile = () => {
             backgroundColor: '#f8f9fa',
             padding: '1rem',
             borderRadius: '8px',
-            textAlign: 'center'
+            textAlign: 'center',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Followers</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.followers}</p>
+            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem', fontSize: '16px' }}>Followers</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#333' }}>{profile.followers}</p>
           </div>
           
           <div style={{
             backgroundColor: '#f8f9fa',
             padding: '1rem',
             borderRadius: '8px',
-            textAlign: 'center'
+            textAlign: 'center',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Following</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.following.length}</p>
+            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem', fontSize: '16px' }}>Following</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#333' }}>{profile.following.length}</p>
           </div>
           
           <div style={{
             backgroundColor: '#f8f9fa',
             padding: '1rem',
             borderRadius: '8px',
-            textAlign: 'center'
+            textAlign: 'center',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Credits</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.credit}</p>
+            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem', fontSize: '16px' }}>Credits</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#333' }}>{profile.credit}</p>
           </div>
         </div>
         
         <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ marginBottom: '1rem', color: '#333' }}>Contact Information</h3>
+          <h3 style={{ marginBottom: '1rem', color: '#333', fontSize: '20px' }}>Contact Information</h3>
           <div style={{
             backgroundColor: '#f8f9fa',
-            padding: '1rem',
-            borderRadius: '8px'
+            padding: '1.5rem',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <p style={{ marginBottom: '0.5rem' }}><strong>Email:</strong> {profile.email}</p>
-            {profile.phone_number && <p><strong>Phone:</strong> {profile.phone_number}</p>}
+            <p style={{ marginBottom: '0.75rem', color: '#555' }}><strong style={{ color: '#333' }}>Email:</strong> {profile.email}</p>
+            {profile.phone_number && (
+              <p style={{ color: '#555' }}><strong style={{ color: '#333' }}>Phone:</strong> {profile.phone_number}</p>
+            )}
           </div>
         </div>
         
         <div>
-          <h3 style={{ marginBottom: '1rem', color: '#333' }}>Academic Information</h3>
+          <h3 style={{ marginBottom: '1rem', color: '#333', fontSize: '20px' }}>Academic Information</h3>
           <div style={{
             backgroundColor: '#f8f9fa',
-            padding: '1rem',
-            borderRadius: '8px'
+            padding: '1.5rem',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <p style={{ marginBottom: '0.5rem' }}><strong>Department:</strong> {profile.dept}</p>
-            <p style={{ marginBottom: '0.5rem' }}><strong>Section:</strong> {profile.section}</p>
-            <p><strong>Year:</strong> {profile.year}</p>
+            <p style={{ marginBottom: '0.75rem', color: '#555' }}><strong style={{ color: '#333' }}>Department:</strong> {profile.dept}</p>
+            <p style={{ marginBottom: '0.75rem', color: '#555' }}><strong style={{ color: '#333' }}>Section:</strong> {profile.section}</p>
+            <p style={{ color: '#555' }}><strong style={{ color: '#333' }}>Year:</strong> {profile.year}</p>
           </div>
         </div>
       </div>

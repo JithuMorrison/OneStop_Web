@@ -1,18 +1,55 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const Login = () => {
+const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [username, setUsername] = useState('');
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    
     if (!email || !password) {
       setError('Please fill in all fields');
-    } else {
-      setError('');
-      // Perform login logic here
-      console.log('Logging in with:', { email, password });
+      return;
+    }
+
+    if (isRegistering && !username) {
+      setError('Please choose a username');
+      return;
+    }
+
+    try {
+      const endpoint = isRegistering ? '/api/register' : '/api/login';
+      const body = isRegistering ? { username, email, password } : { email, password };
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+
+      // Store token and user data
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Notify parent component
+      onLogin(data.user);
+      
+      // Navigate to dashboard
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -40,9 +77,32 @@ const Login = () => {
           marginBottom: '2rem',
           textAlign: 'center',
           color: '#333'
-        }}>Welcome Back</h2>
-        {error && <div style={{ color: 'red', fontSize: '14px', marginBottom: '1rem' }}>{error}</div>}
+        }}>{isRegistering ? 'Create Account' : 'Welcome Back'}</h2>
+        
+        {error && <div style={{ color: 'red', fontSize: '14px', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
+        
         <form onSubmit={handleSubmit}>
+          {isRegistering && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label htmlFor="username" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Username</label>
+              <input
+                type="text"
+                id="username"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+          )}
+          
           <div style={{ marginBottom: '1.5rem' }}>
             <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Email</label>
             <input
@@ -61,6 +121,7 @@ const Login = () => {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
+          
           <div style={{ marginBottom: '2rem' }}>
             <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Password</label>
             <input
@@ -79,6 +140,7 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          
           <button
             type="submit"
             style={{
@@ -93,10 +155,30 @@ const Login = () => {
               fontSize: '15px',
               cursor: 'pointer',
               boxShadow: '0 4px 14px rgba(0, 0, 0, 0.1)',
-              transition: 'background 0.3s ease'
+              transition: 'background 0.3s ease',
+              marginBottom: '1rem'
             }}
           >
-            Log In
+            {isRegistering ? 'Register' : 'Log In'}
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setIsRegistering(!isRegistering)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: 'transparent',
+              color: '#4A00E0',
+              border: '1px solid #4A00E0',
+              borderRadius: '10px',
+              fontWeight: '600',
+              fontSize: '15px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            {isRegistering ? 'Already have an account? Log In' : 'Need an account? Register'}
           </button>
         </form>
       </div>

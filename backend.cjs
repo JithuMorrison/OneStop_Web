@@ -14,27 +14,29 @@ app.use(express.json());
 mongoose.connect(process.env.MONGOURL, {}).then(() => console.log("Connected to MongoDB"))
   .catch(err => console.error("MongoDB connection error:", err));
 
-// User Schema
+// User Schema matching your format
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
+  phone_number: { type: String },
+  role: { type: String, default: 'user' },
+  dob: { type: String, default: '' },
+  credit: { type: Number, default: 1000 },
+  events: { type: Array, default: [] },
+  dept: { type: String },
+  section: { type: String },
+  year: { type: String },
+  favblog: { type: Array, default: [] },
+  favmat: { type: Array, default: [] },
+  titles: { type: Array, default: [] },
+  followers: { type: Number, default: 0 },
+  following: { type: Array, default: [] },
   password: { type: String, required: true },
-  bio: { type: String, default: '' },
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model('User', UserSchema);
-
-// CGPA Schema (your existing schema)
-const CgpaSchema = new mongoose.Schema({
-  sem: String,
-  dept: String,
-  subjects: [[String, Number]]
-}, { collection: 'cgpa' });
-
-const CgpaModel = mongoose.model('Cgpa', CgpaSchema);
 
 // Middleware to verify JWT
 const authenticate = (req, res, next) => {
@@ -53,7 +55,7 @@ const authenticate = (req, res, next) => {
 // Routes
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, name, email, password, phone_number, dept, section, year } = req.body;
     
     // Check if user exists
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
@@ -64,11 +66,18 @@ app.post('/api/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with all fields
     const user = new User({
       username,
+      name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      phone_number,
+      dept,
+      section,
+      year,
+      role: 'user',
+      credit: 1000
     });
 
     await user.save();
@@ -76,7 +85,20 @@ app.post('/api/register', async (req, res) => {
     // Create token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
-    res.status(201).json({ token, user: { id: user._id, username, email } });
+    res.status(201).json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        username, 
+        name,
+        email,
+        phone_number,
+        dept,
+        section,
+        year,
+        credit: user.credit
+      } 
+    });
   } catch (err) {
     res.status(500).json({ error: 'Registration failed' });
   }
@@ -101,18 +123,30 @@ app.post('/api/login', async (req, res) => {
     // Create token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
-    res.json({ token, user: { id: user._id, username: user.username, email: user.email } });
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        username: user.username, 
+        name: user.name,
+        email: user.email,
+        phone_number: user.phone_number,
+        dept: user.dept,
+        section: user.section,
+        year: user.year,
+        credit: user.credit
+      } 
+    });
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
+// Get user profile
 app.get('/api/user/:id', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
-      .select('-password')
-      .populate('followers', 'username')
-      .populate('following', 'username');
+      .select('-password');
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -124,20 +158,29 @@ app.get('/api/user/:id', authenticate, async (req, res) => {
   }
 });
 
+// Follow user
 app.post('/api/follow/:id', authenticate, async (req, res) => {
   try {
     if (req.params.id === req.userId) {
       return res.status(400).json({ error: 'Cannot follow yourself' });
     }
 
+    // Get current user
+    const currentUser = await User.findById(req.userId);
+    
+    // Check if already following
+    if (currentUser.following.includes(req.params.id)) {
+      return res.status(400).json({ error: 'Already following this user' });
+    }
+
     // Add to following list
     await User.findByIdAndUpdate(req.userId, {
-      $addToSet: { following: req.params.id }
+      $push: { following: req.params.id }
     });
 
-    // Add to target user's followers list
+    // Add to target user's followers count
     await User.findByIdAndUpdate(req.params.id, {
-      $addToSet: { followers: req.userId }
+      $inc: { followers: 1 }
     });
 
     res.json({ message: 'Followed successfully' });
@@ -146,12 +189,14 @@ app.post('/api/follow/:id', authenticate, async (req, res) => {
   }
 });
 
+// Search users
 app.get('/api/search', authenticate, async (req, res) => {
   try {
     const { query } = req.query;
     const users = await User.find({
       $or: [
         { username: { $regex: query, $options: 'i' } },
+        { name: { $regex: query, $options: 'i' } },
         { email: { $regex: query, $options: 'i' } }
       ]
     }).select('-password').limit(10);
@@ -159,17 +204,6 @@ app.get('/api/search', authenticate, async (req, res) => {
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: 'Search failed' });
-  }
-});
-
-// Your existing CGPA route
-app.get('/api/subjects', async (req, res) => {
-  try {
-    const { sem, dept } = req.query;
-    const data = await CgpaModel.findOne({ sem, dept });
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch data' });
   }
 });
 

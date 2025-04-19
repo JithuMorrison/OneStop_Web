@@ -12,7 +12,7 @@ const Profile = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`/api/user/${id || currentUser?.id}`, {
+        const response = await fetch(`http://localhost:5000/api/user/${id || currentUser?.id}`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -24,7 +24,7 @@ const Profile = () => {
         
         const data = await response.json();
         setProfile(data);
-        setIsFollowing(data.followers.some(follower => follower._id === currentUser?.id));
+        setIsFollowing(data.following.includes(currentUser?.id));
         setIsOwnProfile(data._id === currentUser?.id);
       } catch (err) {
         console.error(err);
@@ -37,7 +37,7 @@ const Profile = () => {
 
   const handleFollow = async () => {
     try {
-      const response = await fetch(`/api/follow/${profile._id}`, {
+      const response = await fetch(`http://localhost:5000/api/follow/${profile._id}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -53,12 +53,12 @@ const Profile = () => {
       if (isFollowing) {
         setProfile(prev => ({
           ...prev,
-          followers: prev.followers.filter(f => f._id !== currentUser.id)
+          followers: prev.followers - 1
         }));
       } else {
         setProfile(prev => ({
           ...prev,
-          followers: [...prev.followers, { _id: currentUser.id, username: currentUser.username }]
+          followers: prev.followers + 1
         }));
       }
       
@@ -128,12 +128,13 @@ const Profile = () => {
             color: '#555',
             marginRight: '2rem'
           }}>
-            {profile.username.charAt(0).toUpperCase()}
+            {profile.name.charAt(0).toUpperCase()}
           </div>
           
           <div>
-            <h2 style={{ fontSize: '28px', marginBottom: '0.5rem' }}>{profile.username}</h2>
-            <p style={{ color: '#666', marginBottom: '1rem' }}>{profile.bio || 'No bio yet'}</p>
+            <h2 style={{ fontSize: '28px', marginBottom: '0.5rem' }}>{profile.name}</h2>
+            <p style={{ color: '#666', marginBottom: '0.25rem' }}>@{profile.username}</p>
+            <p style={{ color: '#666', marginBottom: '1rem' }}>{profile.dept} - {profile.year} Year</p>
             
             {!isOwnProfile && (
               <button
@@ -155,7 +156,7 @@ const Profile = () => {
         
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: 'repeat(3, 1fr)',
           gap: '1rem',
           marginBottom: '2rem'
         }}>
@@ -166,7 +167,7 @@ const Profile = () => {
             textAlign: 'center'
           }}>
             <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Followers</h3>
-            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.followers.length}</p>
+            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.followers}</p>
           </div>
           
           <div style={{
@@ -178,29 +179,41 @@ const Profile = () => {
             <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Following</h3>
             <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.following.length}</p>
           </div>
+          
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem',
+            borderRadius: '8px',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ color: '#4A00E0', marginBottom: '0.5rem' }}>Credits</h3>
+            <p style={{ fontSize: '24px', fontWeight: 'bold' }}>{profile.credit}</p>
+          </div>
+        </div>
+        
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ marginBottom: '1rem', color: '#333' }}>Contact Information</h3>
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <p style={{ marginBottom: '0.5rem' }}><strong>Email:</strong> {profile.email}</p>
+            {profile.phone_number && <p><strong>Phone:</strong> {profile.phone_number}</p>}
+          </div>
         </div>
         
         <div>
-          <h3 style={{ marginBottom: '1rem', color: '#333' }}>Followers</h3>
-          {profile.followers.length > 0 ? (
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {profile.followers.map(follower => (
-                <li 
-                  key={follower._id}
-                  style={{
-                    padding: '0.5rem',
-                    borderBottom: '1px solid #eee',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => navigate(`/profile/${follower._id}`)}
-                >
-                  {follower.username}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p style={{ color: '#666' }}>No followers yet</p>
-          )}
+          <h3 style={{ marginBottom: '1rem', color: '#333' }}>Academic Information</h3>
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1rem',
+            borderRadius: '8px'
+          }}>
+            <p style={{ marginBottom: '0.5rem' }}><strong>Department:</strong> {profile.dept}</p>
+            <p style={{ marginBottom: '0.5rem' }}><strong>Section:</strong> {profile.section}</p>
+            <p><strong>Year:</strong> {profile.year}</p>
+          </div>
         </div>
       </div>
     </div>

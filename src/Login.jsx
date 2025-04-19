@@ -7,6 +7,11 @@ const Login = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [dept, setDept] = useState('');
+  const [section, setSection] = useState('');
+  const [year, setYear] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -18,14 +23,23 @@ const Login = ({ onLogin }) => {
       return;
     }
 
-    if (isRegistering && !username) {
-      setError('Please choose a username');
+    if (isRegistering && (!username || !name || !dept || !section || !year)) {
+      setError('Please fill in all required fields');
       return;
     }
 
     try {
       const endpoint = isRegistering ? 'http://localhost:5000/api/register' : 'http://localhost:5000/api/login';
-      const body = isRegistering ? { username, email, password } : { email, password };
+      const body = isRegistering ? { 
+        username, 
+        name,
+        email, 
+        password,
+        phone_number: phoneNumber,
+        dept,
+        section,
+        year
+      } : { email, password };
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -83,28 +97,135 @@ const Login = ({ onLogin }) => {
         
         <form onSubmit={handleSubmit}>
           {isRegistering && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label htmlFor="username" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Username</label>
-              <input
-                type="text"
-                id="username"
-                style={{
-                  width: '100%',
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid #ccc',
-                  fontSize: '14px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s ease'
-                }}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
+            <>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="username" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Username*</label>
+                <input
+                  type="text"
+                  id="username"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="name" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Full Name*</label>
+                <input
+                  type="text"
+                  id="name"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="phone" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Phone Number</label>
+                <input
+                  type="text"
+                  id="phone"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="dept" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Department*</label>
+                <select
+                  id="dept"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={dept}
+                  onChange={(e) => setDept(e.target.value)}
+                >
+                  <option value="">Select Department</option>
+                  <option value="CSE">Computer Science</option>
+                  <option value="ECE">Electronics</option>
+                  <option value="MECH">Mechanical</option>
+                  <option value="CIVIL">Civil</option>
+                </select>
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="section" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Section*</label>
+                <input
+                  type="text"
+                  id="section"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                />
+              </div>
+              
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label htmlFor="year" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Year*</label>
+                <select
+                  id="year"
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '1010px',
+                    border: '1px solid #ccc',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s ease'
+                  }}
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                >
+                  <option value="">Select Year</option>
+                  <option value="2020">2020</option>
+                  <option value="2021">2021</option>
+                  <option value="2022">2022</option>
+                  <option value="2023">2023</option>
+                </select>
+              </div>
+            </>
           )}
           
           <div style={{ marginBottom: '1.5rem' }}>
-            <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Email</label>
+            <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Email*</label>
             <input
               type="email"
               id="email"
@@ -123,7 +244,7 @@ const Login = ({ onLogin }) => {
           </div>
           
           <div style={{ marginBottom: '2rem' }}>
-            <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Password</label>
+            <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Password*</label>
             <input
               type="password"
               id="password"

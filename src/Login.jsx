@@ -23,12 +23,9 @@ const Login = ({ onLogin }) => {
       return;
     }
 
-    if(email==='jithus2004@gmail.com' && password==='HelloWorld'){
-      navigate('/admindash');
-    }
-
-    if (isRegistering && (!username || !name || !dept || !section || !year)) {
-      setError('Please fill in all required fields');
+    // Hardcoded admin login (remove this in production)
+    if(email === 'jithus2004@gmail.com' && password === 'HelloWorld') {
+      navigate('/admin/dashboard');
       return;
     }
 
@@ -42,7 +39,8 @@ const Login = ({ onLogin }) => {
         phone_number: phoneNumber,
         dept,
         section,
-        year
+        year,
+        role: 'student' // Default role for registration
       } : { email, password };
       
       const response = await fetch(endpoint, {
@@ -64,8 +62,14 @@ const Login = ({ onLogin }) => {
       // Notify parent component
       onLogin(data.user);
       
-      // Navigate to dashboard
-      navigate('/dashboard');
+      // Navigate based on role
+      if (data.user.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else if (data.user.role === 'teacher') {
+        navigate('/teacher/dashboard');
+      } else {
+        navigate('/student/dashboard');
+      }
     } catch (err) {
       setError(err.message);
     }

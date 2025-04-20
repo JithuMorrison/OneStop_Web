@@ -99,10 +99,148 @@ const authenticate = (req, res, next) => {
   }
 };
 
+const authMiddleware = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization').replace('Bearer ', '');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findOne({ _id: decoded.userId });
+
+    if (!user) {
+      throw new Error();
+    }
+
+    req.user = user;
+    req.token = token;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Please authenticate' });
+  }
+};
+
+const adminMiddleware = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+  next();
+};
+
+// Admin routes
+app.get('/admin/users',  async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.json({ users });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const { role, search } = req.query;
+    
+    let query = {};
+    if (role) query.role = role;
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const users = await User.find(query)
+      .select('-password')
+      .sort({ createdAt: -1 });
+    
+    // Get counts
+    const totalUsers = await User.countDocuments();
+    const totalStudents = await User.countDocuments({ role: 'student' });
+    const totalTeachers = await User.countDocuments({ role: 'teacher' });
+    
+    res.json({
+      users,
+      counts: {
+        total: totalUsers,
+        students: totalStudents,
+        teachers: totalTeachers
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Create teacher account (admin only)
+app.post('/api/admin/teachers', async (req, res) => {
+  try {
+    const { username, name, email, password, phone_number, dept, section, year } = req.body;
+    
+    // Validate required fields
+    if (!username || !name || !email || !password || !dept) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    // Check if user exists
+    const existingUser = await User.findOne({ $or: [{ email }, { username }] });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+    
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Create teacher
+    const teacher = new User({
+      username,
+      name,
+      email,
+      password: hashedPassword,
+      phone_number,
+      dept,
+      section,
+      year,
+      role: 'teacher',
+      credit: 0
+    });
+    
+    await teacher.save();
+    
+    res.status(201).json({
+      message: 'Teacher account created successfully',
+      teacher: {
+        id: teacher._id,
+        username: teacher.username,
+        name: teacher.name,
+        email: teacher.email,
+        dept: teacher.dept,
+        role: teacher.role
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create teacher account' });
+  }
+});
+
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Clean up any related data (chats, etc.)
+    await Chat.deleteMany({ participants: user._id });
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 // Routes
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, name, email, password, phone_number, dept, section, year } = req.body;
+    const { username, name, email, password, phone_number, dept, section, year, role = 'student' } = req.body;
     
     // Check if user exists
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
@@ -110,10 +248,15 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
+    // Only admin can create teacher accounts
+    if (role === 'teacher' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to create teacher account' });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user with all fields
+    // Create user
     const user = new User({
       username,
       name,
@@ -123,8 +266,8 @@ app.post('/api/register', async (req, res) => {
       dept,
       section,
       year,
-      role: 'user',
-      credit: 1000
+      role,
+      credit: role === 'student' ? 1000 : 0
     });
 
     await user.save();
@@ -143,6 +286,7 @@ app.post('/api/register', async (req, res) => {
         dept,
         section,
         year,
+        role: user.role,
         credit: user.credit
       } 
     });

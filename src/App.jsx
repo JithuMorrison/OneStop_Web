@@ -55,7 +55,7 @@ const App = () => {
           element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} 
         />
         <Route path='/cgpa' element={<CgpaCalc />} />
-        <Route path='/admindash' element={<AdminDashboard />} />
+        <Route path='/admin/dashboard' element={<AdminDashboard />} />
       </Routes>
     </Router>
   );

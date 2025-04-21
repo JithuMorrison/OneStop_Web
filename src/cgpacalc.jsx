@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { FiArrowLeft } from 'react-icons/fi';
 
 const gradePoints = {
   'O': 10,
@@ -40,6 +42,11 @@ export default function CgpaCalc() {
   const [grades, setGrades] = useState({});
   const [cgpa, setCgpa] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    navigate('/dashboard');
+  };
 
   const handleFetch = async () => {
     setIsLoading(true);
@@ -90,6 +97,13 @@ export default function CgpaCalc() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-800 text-white flex items-center justify-center p-4">
+      <button
+        onClick={handleBack}
+        className="flex items-center gap-2 px-4 py-2 text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 rounded-full shadow-lg transition-all duration-300 absolute top-6 right-6 backdrop-blur-sm border border-white/20"
+      >
+        <FiArrowLeft className="mr-2" />
+        Back to Dashboard
+      </button>
       <div className="bg-white/5 backdrop-blur-lg rounded-3xl shadow-2xl p-8 max-w-4xl w-full border border-white/10 mt-4">
         {/* Header with animated gradient text */}
         <div className="text-center mb-10">

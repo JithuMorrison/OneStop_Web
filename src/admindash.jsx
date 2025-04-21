@@ -140,6 +140,12 @@ const AdminDashboard = () => {
     );
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Notification */}
@@ -183,6 +189,15 @@ const AdminDashboard = () => {
             <FaUserGraduate className="mr-3" />
             Students
           </button>
+          <div className="absolute bottom-4 w-full left-0 px-4">
+            <button 
+              onClick={handleLogout}
+              className="flex items-center justify-center w-full p-3 rounded-lg bg-blue-400 hover:bg-blue-500 transition-colors duration-200 shadow-lg"
+            >
+              <FiX className="mr-2" />
+              <span className="font-medium">Logout</span>
+            </button>
+          </div>
         </nav>
       </div>
 

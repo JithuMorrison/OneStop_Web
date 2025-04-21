@@ -25,6 +25,19 @@ const Login = ({ onLogin }) => {
 
     // Hardcoded admin login (remove this in production)
     if(email === 'jithus2004@gmail.com' && password === 'HelloWorld') {
+      // Create admin user object
+      const adminUser = {
+        id: 'admin001',
+        email: email,
+        role: 'admin',
+        name: 'Admin User'
+      };
+      
+      // Store admin details in localStorage
+      localStorage.setItem('token', 'admin-token');
+      localStorage.setItem('user', JSON.stringify(adminUser));
+      
+      // Navigate to admin dashboard
       navigate('/admin/dashboard');
       return;
     }

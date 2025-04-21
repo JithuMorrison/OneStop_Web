@@ -9,16 +9,20 @@ import AdminDashboard from './admindash';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user'));
     if (token) {
       setIsAuthenticated(true);
+      setIsAdmin(user && user.id === 'admin001');
     }
   }, []);
 
   const handleLogin = (user) => {
     setIsAuthenticated(true);
+    setIsAdmin(user.id === 'admin001');
   };
 
   const handleLogout = () => {
@@ -52,7 +56,10 @@ const App = () => {
         />
         <Route 
           path="/" 
-          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} 
+          element={<Navigate to={isAuthenticated ? 
+            (isAdmin ? "/admin/dashboard" : "/dashboard") : 
+            "/login"} />
+          } 
         />
         <Route path='/cgpa' element={<CgpaCalc />} />
         <Route path='/admin/dashboard' element={<AdminDashboard />} />

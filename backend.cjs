@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -41,7 +43,9 @@ const UserSchema = new mongoose.Schema({
   followers: { type: Number, default: 0 },
   following: { type: Array, default: [] },
   password: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  resetPasswordOTP: String,
+  resetPasswordExpires: Date
 });
 
 const User = mongoose.model('User', UserSchema);
@@ -547,6 +551,84 @@ app.get('/api/chats', authenticate, async (req, res) => {
     res.json(chats);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch chats' });
+  }
+});
+
+// ----------------------------------------------------- Forgot Password -----------------------------------------------------------------
+
+const sendEmail = async (mailOptions) => {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  await transporter.sendMail(mailOptions);
+};
+
+// Add this route after other API routes
+app.post('/api/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetTokenExpiry = Date.now() + 600000; // 10 minutes
+
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = resetTokenExpiry;
+    
+    await user.save({ validateBeforeSave: false });
+
+    const mailOptions = {
+      to: user.email,
+      from: 'no-reply@yourdomain.com',
+      subject: 'Password Reset OTP',
+      text: `Your OTP for password reset is: ${otp}\n\nThis OTP is valid for 10 minutes.`
+    };
+
+    await sendEmail(mailOptions);
+
+    res.json({ message: 'OTP sent to your email' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  const { email, otp, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({ 
+      email,
+      resetPasswordOTP: otp,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid OTP or OTP expired' });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.resetPasswordOTP = undefined;
+    user.resetPasswordExpires = undefined;
+
+    await user.save();
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
   }
 });
 

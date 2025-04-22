@@ -13,6 +13,12 @@ const Login = ({ onLogin }) => {
   const [section, setSection] = useState('');
   const [year, setYear] = useState('');
   const navigate = useNavigate();
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [forgotPasswordStep, setForgotPasswordStep] = useState(1);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,6 +89,67 @@ const Login = ({ onLogin }) => {
       } else {
         navigate('/student/dashboard');
       }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!forgotEmail) {
+      setError('Please enter your email');
+      return;
+    }
+  
+    try {
+      const response = await fetch('http://localhost:5000/api/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+  
+      setError('OTP sent to your email');
+      setForgotPasswordStep(2); // Move to OTP step
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+  
+    try {
+      const response = await fetch('http://localhost:5000/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail,
+          otp,
+          newPassword
+        })
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong');
+      }
+  
+      setError('Password reset successfully');
+      setShowForgotPassword(false);
     } catch (err) {
       setError(err.message);
     }
@@ -322,6 +389,155 @@ const Login = ({ onLogin }) => {
           >
             {isRegistering ? 'Already have an account? Log In' : 'Need an account? Register'}
           </button>
+          {!isRegistering && !showForgotPassword && (
+          <button
+            type="button"
+            onClick={() => setShowForgotPassword(true)}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: 'transparent',
+              color: '#4A00E0',
+              border: 'none',
+              borderRadius: '10px',
+              fontWeight: '600',
+              fontSize: '15px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              marginTop: '1rem'
+            }}
+          >
+            Forgot Password?
+          </button>
+        )}
+
+        {showForgotPassword && (
+          <div style={{ marginTop: '1rem' }}>
+            {forgotPasswordStep === 1 && (
+              <>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label htmlFor="forgotEmail" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Enter your email</label>
+                  <input
+                    type="email"
+                    id="forgotEmail"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #ccc',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: '#4A00E0',
+                    backgroundImage: 'linear-gradient(to right, #8E2DE2, #4A00E0)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.1)',
+                    transition: 'background 0.3s ease',
+                    marginBottom: '1rem'
+                  }}
+                >
+                  Send OTP
+                </button>
+              </>
+            )}
+
+            {forgotPasswordStep === 2 && (
+              <>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label htmlFor="otp" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Enter OTP</label>
+                  <input
+                    type="text"
+                    id="otp"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #ccc',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label htmlFor="newPassword" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>New Password</label>
+                  <input
+                    type="password"
+                    id="newPassword"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #ccc',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label htmlFor="confirmPassword" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '14px', color: '#555' }}>Confirm Password</label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid #ccc',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s ease'
+                    }}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetPassword}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    backgroundColor: '#4A00E0',
+                    backgroundImage: 'linear-gradient(to right, ',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.1)',
+                    transition: 'background 0.3s ease',
+                    marginBottom: '1rem'
+                  }}
+                >
+                  Reset Password
+                </button>
+              </>
+            )}
+          </div>
+        )}
         </form>
       </div>
     </div>

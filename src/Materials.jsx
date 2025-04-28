@@ -17,6 +17,15 @@ const Materials = () => {
   useEffect(() => {
     const fetchMaterials = async () => {
       try {
+        // Fetch users data
+        const usersResponse = await fetch('http://localhost:5000/api/admin/users', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        const usersData = await usersResponse.json();
+        const usersMap = new Map(usersData.users.map(user => [user._id, user]));
+
         // Fetch first 10 materials from MongoDB
         const response = await fetch('http://localhost:5000/api/materials', {
           headers: {
@@ -48,9 +57,11 @@ const Materials = () => {
               };
             }
 
+            const user = usersMap.get(material.userId);
             return {
               ...material,
-              downloadUrl: fileData.signedUrl
+              downloadUrl: fileData.signedUrl,
+              userName: user ? user.name : 'Unknown'
             };
           })
         );
@@ -176,7 +187,7 @@ const Materials = () => {
                   color: 'white',
                   marginRight: '1rem'
                 }}>
-                  {material.userId}
+                  {material.userName?.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h3 style={{
@@ -188,7 +199,7 @@ const Materials = () => {
                   <p style={{
                     fontSize: '0.875rem',
                     color: '#4a5568'
-                  }}>by {material.uploadDate}</p>
+                  }}>by {material.userName}</p>
                 </div>
               </div>
 
@@ -207,7 +218,7 @@ const Materials = () => {
                   fontSize: '0.75rem',
                   color: '#718096'
                 }}>
-                  {new Date(material.uploaded_at).toLocaleDateString()}
+                  {new Date(material.uploadDate).toLocaleDateString()}
                 </span>
                 {material.downloadUrl && (
                   <a

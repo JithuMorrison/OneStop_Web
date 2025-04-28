@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
+import supabase from './supabase';
 
 const Materials = () => {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-
-  // Initialize Supabase client
-  const supabase = createClient(
-    'https://btnbpqgzczkopffydkms.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bmJwcWd6Y3prb3BmZnlka21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM5MDE3MTIsImV4cCI6MjA0OTQ3NzcxMn0.ClI_obLsIuzQ7ks-ysopQ0cX2ZBUSwRanS1mRjQ3qUM'
-  );
 
   useEffect(() => {
     const fetchMaterials = async () => {

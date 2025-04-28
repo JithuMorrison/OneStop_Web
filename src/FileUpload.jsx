@@ -3,11 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import { FiUpload, FiArrowLeft, FiFile } from 'react-icons/fi';
 import axios from 'axios';
+import supabase from '../supabase';
 
-// Initialize Supabase client
-const supabaseUrl = 'https://btnbpqgzczkopffydkms.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0bmJwcWd6Y3prb3BmZnlka21zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzM5MDE3MTIsImV4cCI6MjA0OTQ3NzcxMn0.ClI_obLsIuzQ7ks-ysopQ0cX2ZBUSwRanS1mRjQ3qUM';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 const departments = [
   { value: 'CSE', label: 'Computer Science' },

@@ -6,6 +6,7 @@ import Profile from './profile';
 import Search from './search';
 import CgpaCalc from './cgpacalc';
 import AdminDashboard from './admindash';
+import FileUpload from './FileUpload';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -63,6 +64,7 @@ const App = () => {
         />
         <Route path='/cgpa' element={<CgpaCalc />} />
         <Route path='/admin/dashboard' element={<AdminDashboard />} />
+        <Route path='/upload' element={isAuthenticated ? <FileUpload /> : <Navigate to="/login" />} />
       </Routes>
     </Router>
   );

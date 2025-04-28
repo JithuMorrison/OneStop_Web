@@ -24,6 +24,7 @@ const Profile = () => {
         }
         
         const profileData = await profileResponse.json();
+        console.log(profileData);
         setProfile(profileData);
         setIsOwnProfile(profileData._id === currentUser?.id);
 
@@ -271,6 +272,28 @@ const Profile = () => {
             <p style={{ marginBottom: '0.75rem', color: '#555' }}><strong style={{ color: '#333' }}>Department:</strong> {profile.dept}</p>
             <p style={{ marginBottom: '0.75rem', color: '#555' }}><strong style={{ color: '#333' }}>Section:</strong> {profile.section}</p>
             <p style={{ color: '#555' }}><strong style={{ color: '#333' }}>Year:</strong> {profile.year}</p>
+          </div>
+        </div>
+        <div>
+          <h3 style={{ marginBottom: '1rem', color: '#333', fontSize: '20px', marginTop: '10px' }}>Titles</h3>
+          <div style={{
+            backgroundColor: '#f8f9fa',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            {profile.titles && profile.titles.length > 0 ? (
+              profile.titles.map((title, index) => (
+                <p key={index} style={{ 
+                  marginBottom: index < profile.titles.length - 1 ? '0.75rem' : 0,
+                  color: '#555'
+                }}>
+                  {title}
+                </p>
+              ))
+            ) : (
+              <p style={{ color: '#555' }}>No titles to display</p>
+            )}
           </div>
         </div>
       </div>

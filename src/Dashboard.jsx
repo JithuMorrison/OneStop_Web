@@ -182,6 +182,35 @@ const Dashboard = () => {
               <li style={{ marginBottom: '0.5rem' }}>
                 <button 
                   onClick={() => {
+                    setActiveTab('upload');
+                    navigate('/upload');
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: activeTab === 'upload' ? '#4338ca' : 'transparent',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    transition: 'all 0.2s ease',
+                    fontWeight: '500',
+                    ':hover': {
+                      backgroundColor: '#4338ca'
+                    }
+                  }}
+                >
+                  <FiBook size={18} />
+                  Upload Files
+                </button>
+              </li>
+              <li style={{ marginBottom: '0.5rem' }}>
+                <button 
+                  onClick={() => {
                     setActiveTab('profile');
                     navigate('/profile');
                   }}

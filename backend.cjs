@@ -3,6 +3,20 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+// File Schema
+const fileSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  semester: { type: String, required: true },
+  department: { type: String, required: true },
+  subject: { type: String, required: true },
+  fileName: { type: String, required: true },
+  fileUrl: { type: String, required: true },
+  fileType: { type: String, required: true },
+  uploadDate: { type: Date, default: Date.now }
+});
+
+const File = mongoose.model('File', fileSchema);
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
@@ -74,6 +88,19 @@ const CgpaModel = mongoose.model('Cgpa', Schema);
 
 // -------------------------------------------------------- API Codes ---------------------------------------------------------------
 
+// Middleware to verify JWT
+const authenticateToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
 
 // -------------------------------------------------------- CGPA -------------------------------------------------------------------
 // API to get subjects by sem and dept
@@ -87,21 +114,56 @@ app.get('/api/subjects', async (req, res) => {
   }
 });
 
+// File Upload Routes
+app.post('/api/files/upload', authenticateToken, async (req, res) => {
+  try {
+    const fileData = new File({
+      userId: req.body.userId,
+      semester: req.body.semester,
+      department: req.body.department,
+      subject: req.body.subject,
+      fileName: req.body.fileName,
+      fileUrl: req.body.fileUrl,
+      fileType: req.body.fileType
+    });
+
+    await fileData.save();
+    res.status(201).json({ message: 'File metadata saved successfully' });
+  } catch (error) {
+    console.error('Error saving file metadata:', error);
+    res.status(500).json({ error: 'Failed to save file metadata' });
+  }
+});
+
+// Get User's Files
+app.get('/api/files/:userId', authenticateToken, async (req, res) => {
+  try {
+    const files = await File.find({ userId: req.params.userId })
+      .sort({ uploadDate: -1 });
+    res.json({ files });
+  } catch (error) {
+    console.error('Error fetching files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// Get Files by Semester and Subject
+app.get('/api/files/:userId/:semester/:subject', authenticateToken, async (req, res) => {
+  try {
+    const files = await File.find({
+      userId: req.params.userId,
+      semester: req.params.semester,
+      subject: req.params.subject
+    }).sort({ uploadDate: -1 });
+    res.json({ files });
+  } catch (error) {
+    console.error('Error fetching files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
 
 // ------------------------------------------------------------- Login ---------------------------------------------------------------------
-// Middleware to verify JWT
-const authenticate = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token provided' });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid token' });
-  }
-};
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -340,7 +402,7 @@ app.post('/api/login', async (req, res) => {
 // ------------------------------------------------------------ Profile  ----------------------------------------------------------------
 
 // Get user profile
-app.get('/api/user/:id', authenticate, async (req, res) => {
+app.get('/api/user/:id', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
       .select('-password');
@@ -357,7 +419,7 @@ app.get('/api/user/:id', authenticate, async (req, res) => {
 
 // ----------------------------------------------------- Connect - Follow -----------------------------------------------------------------
 
-app.get('/api/user/:userId/following', authenticate, async (req, res) => {
+app.get('/api/user/:userId/following', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId)
       .select('following')
@@ -374,7 +436,7 @@ app.get('/api/user/:userId/following', authenticate, async (req, res) => {
 });
 
 // Follow user
-app.post('/api/follow/:userId', authenticate, async (req, res) => {
+app.post('/api/follow/:userId', authenticateToken, async (req, res) => {
   try {
     const targetUserId = req.params.userId;
     const currentUserId = req.userId;
@@ -406,7 +468,7 @@ app.post('/api/follow/:userId', authenticate, async (req, res) => {
 });
 
 // Unfollow user
-app.post('/api/unfollow/:userId', authenticate, async (req, res) => {
+app.post('/api/unfollow/:userId', authenticateToken, async (req, res) => {
   try {
     const targetUserId = req.params.userId;
     const currentUserId = req.userId;
@@ -438,7 +500,7 @@ app.post('/api/unfollow/:userId', authenticate, async (req, res) => {
 });
 
 // Get user's followers and following data
-app.get('/api/users/:userId/follows', authenticate, async (req, res) => {
+app.get('/api/users/:userId/follows', authenticateToken, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId)
       .select('followers following')
@@ -460,7 +522,7 @@ app.get('/api/users/:userId/follows', authenticate, async (req, res) => {
 // ----------------------------------------------------- Search Users -----------------------------------------------------------------
 
 // Search users
-app.get('/api/search', authenticate, async (req, res) => {
+app.get('/api/search', authenticateToken, async (req, res) => {
   try {
     const { query } = req.query;
     const users = await User.find({
@@ -479,7 +541,7 @@ app.get('/api/search', authenticate, async (req, res) => {
 
 // ----------------------------------------------------- Chat Users ----------------------------------------------------------------------
 
-app.get('/api/chat/:userId', authenticate, async (req, res) => {
+app.get('/api/chat/:userId', authenticateToken, async (req, res) => {
   try {
     const { userId } = req.params;
     const currentUserId = req.userId;
@@ -504,7 +566,7 @@ app.get('/api/chat/:userId', authenticate, async (req, res) => {
 });
 
 // Send message
-app.post('/api/chat/:chatId/message', authenticate, async (req, res) => {
+app.post('/api/chat/:chatId/message', authenticateToken, async (req, res) => {
   try {
     const { chatId } = req.params;
     const { content } = req.body;
@@ -525,7 +587,7 @@ app.post('/api/chat/:chatId/message', authenticate, async (req, res) => {
 });
 
 // Get chat messages
-app.get('/api/chat/:chatId/messages', authenticate, async (req, res) => {
+app.get('/api/chat/:chatId/messages', authenticateToken, async (req, res) => {
   try {
     const { chatId } = req.params;
     const chat = await Chat.findById(chatId)
@@ -539,7 +601,7 @@ app.get('/api/chat/:chatId/messages', authenticate, async (req, res) => {
 });
 
 // Get all chats for current user
-app.get('/api/chats', authenticate, async (req, res) => {
+app.get('/api/chats', authenticateToken, async (req, res) => {
   try {
     const chats = await Chat.find({
       participants: req.userId

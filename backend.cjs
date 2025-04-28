@@ -102,6 +102,17 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Get first 10 files
+app.get('/api/materials', authenticateToken, async (req, res) => {
+  try {
+    const files = await File.find({}).sort({ uploadDate: -1 }).limit(10);
+    res.json({ files });
+  } catch (error) {
+    console.error('Error fetching files:', error);
+    res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
 // -------------------------------------------------------- CGPA -------------------------------------------------------------------
 // API to get subjects by sem and dept
 app.get('/api/subjects', async (req, res) => {

@@ -461,6 +461,28 @@ const Dashboard = () => {
                 <FiUser size={18} />
                 View Profile
               </button>
+              <button 
+                onClick={() => navigate('/materials')}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: 'white',
+                  color: '#4f46e5',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '0.375rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease',
+                  ':hover': {
+                    backgroundColor: '#f1f5f9'
+                  }
+                }}
+              >
+                <FiUser size={18} />
+                Materials
+              </button>
             </div>
           </div>
 

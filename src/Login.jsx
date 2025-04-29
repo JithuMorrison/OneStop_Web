@@ -113,7 +113,7 @@ const Login = ({ onLogin }) => {
       const data = await response.json();
   
       if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong');
+        throw new Error(data.error || 'Something went wrong!');
       }
   
       setError('OTP sent to your email');

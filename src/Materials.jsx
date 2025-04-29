@@ -190,7 +190,7 @@ const Materials = () => {
                     fontWeight: '600',
                     color: '#1a202c',
                     marginBottom: '0.25rem'
-                  }}>{material.title}</h3>
+                  }}>{material.fileName}</h3>
                   <p style={{
                     fontSize: '0.875rem',
                     color: '#4a5568'
@@ -202,7 +202,7 @@ const Materials = () => {
                 fontSize: '0.875rem',
                 color: '#4a5568',
                 marginBottom: '1rem'
-              }}>{material.description}</p>
+              }}>Semester: {material.semester}, Subject: {material.subject}</p>
 
               <div style={{
                 display: 'flex',

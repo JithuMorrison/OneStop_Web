@@ -8,6 +8,7 @@ import CgpaCalc from './cgpacalc';
 import AdminDashboard from './admindash';
 import FileUpload from './FileUpload';
 import Materials from './Materials';
+import FeedPage from './feed';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -67,6 +68,7 @@ const App = () => {
         <Route path='/admin/dashboard' element={<AdminDashboard />} />
         <Route path='/upload' element={isAuthenticated ? <FileUpload /> : <Navigate to="/login" />} />
         <Route path='/materials' element={isAuthenticated ? <Materials /> : <Navigate to="/login" />} />
+        <Route path='/feed' element={isAuthenticated ? <FeedPage /> : <Navigate to="/login" />} />
       </Routes>
     </Router>
   );

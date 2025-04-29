@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { createClient } from '@supabase/supabase-js';
 import { FiUpload, FiArrowLeft, FiFile } from 'react-icons/fi';
 import axios from 'axios';
-import supabase from '../supabase';
+import supabase from './supabase';
 
 
 const departments = [

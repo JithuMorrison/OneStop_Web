@@ -266,6 +266,35 @@ const Dashboard = () => {
                   Messages
                 </button>
               </li>
+              <li style={{ marginBottom: '0.5rem' }}>
+                <button 
+                  onClick={() => {
+                    setActiveTab('feed');
+                    navigate('/feed');
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: activeTab === 'messages' ? '#4338ca' : 'transparent',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    transition: 'all 0.2s ease',
+                    fontWeight: '500',
+                    ':hover': {
+                      backgroundColor: '#4338ca'
+                    }
+                  }}
+                >
+                  <FiMessageSquare size={18} />
+                  Feed
+                </button>
+              </li>
             </ul>
           </nav>
 

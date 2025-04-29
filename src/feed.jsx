@@ -92,6 +92,13 @@ function FeedPage() {
         Upload Feed
       </button>
 
+      <button
+        onClick={() => window.location.href = '/dashboard'} 
+        className="absolute top-4 right-4 px-4 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 transition-colors shadow-md"
+      >
+        Back to Dashboard
+      </button>
+
       {showUploadDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">

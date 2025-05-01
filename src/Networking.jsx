@@ -15,7 +15,7 @@ const Networking = () => {
                 Profile
               </Link>
               <Link to="/networking/search" className="flex items-center px-2 py-4 text-gray-500 hover:text-gray-700">
-                Search
+                Search & Chat
               </Link>
             </div>
           </div>

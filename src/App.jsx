@@ -9,6 +9,7 @@ import AdminDashboard from './admindash';
 import FileUpload from './FileUpload';
 import Materials from './Materials';
 import FeedPage from './feed';
+import Networking from './Networking';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -68,6 +69,11 @@ const App = () => {
         <Route path='/admin/dashboard' element={<AdminDashboard />} />
         <Route path='/upload' element={isAuthenticated ? <FileUpload /> : <Navigate to="/login" />} />
         <Route path='/materials' element={isAuthenticated ? <Materials /> : <Navigate to="/login" />} />
+        <Route path='/networking' element={isAuthenticated ? <Networking /> : <Navigate to="/login" />}>
+          <Route path='feed' element={<FeedPage />} />
+          <Route path='profile' element={<Profile />} />
+          <Route path='search' element={<Search />} />
+        </Route>
         <Route path='/feed' element={isAuthenticated ? <FeedPage /> : <Navigate to="/login" />} />
       </Routes>
     </Router>

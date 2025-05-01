@@ -269,8 +269,8 @@ const Dashboard = () => {
               <li style={{ marginBottom: '0.5rem' }}>
                 <button 
                   onClick={() => {
-                    setActiveTab('feed');
-                    navigate('/feed');
+                    setActiveTab('networking');
+                    navigate('/networking');
                   }}
                   style={{
                     width: '100%',
@@ -292,7 +292,7 @@ const Dashboard = () => {
                   }}
                 >
                   <FiMessageSquare size={18} />
-                  Feed
+                  Networking
                 </button>
               </li>
             </ul>

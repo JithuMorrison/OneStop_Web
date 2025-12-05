@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   phone_number: { type: String },
-  role: { type: String, default: 'user' },
+  role: { type: String, default: 'student', enum: ['student', 'teacher', 'admin'] },
   dob: { type: String, default: '' },
   credit: { type: Number, default: 1000 },
   events: { type: Array, default: [] },
@@ -54,15 +54,202 @@ const UserSchema = new mongoose.Schema({
   favblog: { type: Array, default: [] },
   favmat: { type: Array, default: [] },
   titles: { type: Array, default: [] },
-  followers: { type: Number, default: 0 },
+  // SSN Connect fields
+  roll_number: { type: String }, // 13 digits, required for students
+  digital_id: { type: String }, // 7 digits
+  department: { type: String },
+  join_year: { type: Number },
+  followers: { type: Array, default: [] }, // Changed from Number to Array of user IDs
   following: { type: Array, default: [] },
+  liked: { type: Array, default: [] }, // IDs of liked content
+  registered_events: { type: Array, default: [] }, // event IDs
+  badges: { type: Array, default: [] },
+  streak: { type: Number, default: 0 },
+  achievements: { type: Array, default: [] },
+  posts: { type: Array, default: [] }, // post IDs
+  announcements: { type: Array, default: [] }, // announcement IDs
+  materials: { type: Array, default: [] }, // material IDs
+  chats: { type: Array, default: [] }, // chat thread IDs
+  contacts: { type: Array, default: [] }, // user IDs
+  ods: { type: Array, default: [] }, // OD claim IDs
+  last_login: { type: Date },
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
   resetPasswordOTP: String,
   resetPasswordExpires: Date
 });
 
 const User = mongoose.model('User', UserSchema);
+
+// Club Schema
+const ClubSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  logo: { type: String, required: true }, // Supabase Storage URL
+  description: { type: String, required: true },
+  subdomains: { type: Array, default: [] },
+  members: { type: Array, default: [] }, // Array of { userId, role }
+  moderators: { type: Array, default: [] }, // Array of { userId, type: 'teacher' | 'student' }
+  works_done: { type: Array, default: [] },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Club = mongoose.model('Club', ClubSchema);
+
+// Announcement Schema
+const AnnouncementSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  category: { type: String, required: true },
+  image: { type: String, required: true }, // Supabase Storage URL
+  additional_images: { type: Array, default: [] }, // Array of URLs
+  hashtag: { type: String, required: true }, // #type_eventName_startDate_endDate
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  likes: { type: Number, default: 0 },
+  liked_by: { type: Array, default: [] }, // user IDs
+  comments: { type: Array, default: [] }, // Array of { id, content, userId, userName, createdAt }
+  registration_enabled: { type: Boolean, default: false },
+  registration_fields: { type: Array, default: [] },
+  registrations: { type: Array, default: [] }, // Array of registration IDs
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Announcement = mongoose.model('Announcement', AnnouncementSchema);
+
+// Post Schema
+const PostSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  image: { type: String }, // Supabase Storage URL
+  visibility: { type: String, required: true, enum: ['students', 'teachers', 'everyone'] },
+  hashtags: { type: Array, default: [] },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  likes: { type: Number, default: 0 },
+  liked_by: { type: Array, default: [] }, // user IDs
+  comments: { type: Array, default: [] }, // Array of { id, content, userId, userName, createdAt }
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Post = mongoose.model('Post', PostSchema);
+
+// Material Schema
+const MaterialSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  file_url: { type: String }, // Supabase Storage URL
+  external_link: { type: String },
+  uploaded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  likes: { type: Number, default: 0 },
+  liked_by: { type: Array, default: [] }, // user IDs
+  comments: { type: Array, default: [] }, // Array of { id, content, userId, userName, createdAt }
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Material = mongoose.model('Material', MaterialSchema);
+
+// OD Claim Schema
+const ODClaimSchema = new mongoose.Schema({
+  student_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  event_id: { type: mongoose.Schema.Types.ObjectId },
+  event_name: { type: String, required: true },
+  teacher_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  description: { type: String, required: true },
+  status: { type: String, default: 'pending', enum: ['pending', 'accepted', 'rejected'] },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const ODClaim = mongoose.model('ODClaim', ODClaimSchema);
+
+// Event Schema
+const EventSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  type: { type: String, required: true },
+  start_date: { type: Date, required: true },
+  end_date: { type: Date, required: true },
+  source_type: { type: String, required: true, enum: ['announcement', 'exam_schedule'] },
+  source_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Event = mongoose.model('Event', EventSchema);
+
+// Exam Schedule Schema
+const ExamScheduleSchema = new mongoose.Schema({
+  exam_name: { type: String, required: true },
+  date: { type: Date, required: true },
+  year: { type: Number, required: true },
+  semester: { type: Number, required: true },
+  number_of_exams: { type: Number, required: true },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ExamSchedule = mongoose.model('ExamSchedule', ExamScheduleSchema);
+
+// Notification Schema
+const NotificationSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  type: { type: String, required: true, enum: ['like', 'comment', 'announcement', 'od_status', 'event_reminder', 'message', 'query_response'] },
+  content: { type: String, required: true },
+  related_id: { type: mongoose.Schema.Types.ObjectId },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Notification = mongoose.model('Notification', NotificationSchema);
+
+// Query Schema
+const QuerySchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  submitter_role: { type: String, required: true, enum: ['student', 'teacher'] },
+  status: { type: String, default: 'pending', enum: ['pending', 'responded'] },
+  response: { type: String },
+  responded_at: { type: Date },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Query = mongoose.model('Query', QuerySchema);
+
+// Portal Schema
+const PortalSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  external_link: { type: String, required: true },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Portal = mongoose.model('Portal', PortalSchema);
+
+// Tool Schema
+const ToolSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  description: { type: String, required: true },
+  external_link: { type: String, required: true },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Tool = mongoose.model('Tool', ToolSchema);
+
+// Registration Schema
+const RegistrationSchema = new mongoose.Schema({
+  announcement_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Announcement', required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  data: { type: Object, required: true }, // Custom registration fields
+  badge_issued: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Registration = mongoose.model('Registration', RegistrationSchema);
 
 const ChatSchema = new mongoose.Schema({
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -314,10 +501,126 @@ app.delete('/api/admin/users/:id', async (req, res) => {
   }
 });
 
+/**
+ * Helper function to check if two dates are consecutive days
+ * Takes timezone into account by comparing dates in user's local timezone
+ * @param {Date} date1 - First date
+ * @param {Date} date2 - Second date
+ * @returns {boolean} - True if dates are consecutive days
+ */
+const areConsecutiveDays = (date1, date2) => {
+  if (!date1 || !date2) return false;
+  
+  // Convert to date strings (YYYY-MM-DD) to ignore time component
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  
+  // Reset time to midnight for comparison
+  d1.setHours(0, 0, 0, 0);
+  d2.setHours(0, 0, 0, 0);
+  
+  // Calculate difference in days
+  const diffTime = Math.abs(d2 - d1);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays === 1;
+};
+
+/**
+ * Helper function to check if two dates are the same day
+ * @param {Date} date1 - First date
+ * @param {Date} date2 - Second date
+ * @returns {boolean} - True if dates are the same day
+ */
+const isSameDay = (date1, date2) => {
+  if (!date1 || !date2) return false;
+  
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+};
+
+/**
+ * Update user's login streak based on last login timestamp
+ * Awards "Consistency Badge" at 50-day streak
+ * @param {Object} user - User document from MongoDB
+ */
+const updateUserStreak = async (user) => {
+  const now = new Date();
+  
+  // If no previous login, start streak at 1
+  if (!user.last_login) {
+    user.streak = 1;
+    return;
+  }
+  
+  // If logging in on the same day, don't change streak
+  if (isSameDay(user.last_login, now)) {
+    return;
+  }
+  
+  // If consecutive day, increment streak
+  if (areConsecutiveDays(user.last_login, now)) {
+    user.streak += 1;
+    
+    // Award "Consistency Badge" at 50-day streak
+    if (user.streak === 50 && !user.badges.includes('Consistency Badge')) {
+      user.badges.push('Consistency Badge');
+    }
+  } else {
+    // Missed a day, reset streak to 1
+    user.streak = 1;
+  }
+};
+
+// API endpoint to manually update streak (can be called on login or separately)
+app.post('/api/user/streak', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Update streak
+    await updateUserStreak(user);
+    
+    // Update last login
+    user.last_login = new Date();
+    await user.save();
+    
+    res.json({
+      streak: user.streak,
+      badges: user.badges,
+      last_login: user.last_login,
+    });
+  } catch (err) {
+    console.error('Streak update error:', err);
+    res.status(500).json({ error: 'Failed to update streak' });
+  }
+});
+
 // Routes
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, name, email, password, phone_number, dept, section, year, role = 'student' } = req.body;
+    const { 
+      username, 
+      name, 
+      email, 
+      password, 
+      phone_number, 
+      dept, 
+      section, 
+      year, 
+      role = 'student',
+      roll_number,
+      digital_id,
+      department,
+      join_year
+    } = req.body;
     
     // Check if user exists
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
@@ -325,26 +628,40 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Only admin can create teacher accounts
-    if (role === 'teacher' && req.user?.role !== 'admin') {
-      return res.status(403).json({ error: 'Unauthorized to create teacher account' });
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with all SSN Connect fields
     const user = new User({
       username,
       name,
       email,
       password: hashedPassword,
       phone_number,
-      dept,
+      dept: dept || department,
       section,
-      year,
+      year: year || (join_year ? join_year.toString() : undefined),
       role,
-      credit: role === 'student' ? 1000 : 0
+      credit: role === 'student' ? 1000 : 0,
+      // SSN Connect fields
+      roll_number: role === 'student' ? roll_number : null,
+      digital_id,
+      department: department || dept,
+      join_year: join_year || (year ? parseInt(year) : undefined),
+      followers: [],
+      following: [],
+      liked: [],
+      registered_events: [],
+      badges: [],
+      streak: 0,
+      achievements: [], // Will be awarded on first login
+      posts: [],
+      announcements: [],
+      materials: [],
+      chats: [],
+      contacts: [],
+      ods: [],
+      last_login: null, // Not set until first login
     });
 
     await user.save();
@@ -360,14 +677,22 @@ app.post('/api/register', async (req, res) => {
         name,
         email,
         phone_number,
-        dept,
+        dept: user.dept,
         section,
-        year,
+        year: user.year,
         role: user.role,
-        credit: user.credit
+        credit: user.credit,
+        roll_number: user.roll_number,
+        digital_id: user.digital_id,
+        department: user.department,
+        join_year: user.join_year,
+        streak: user.streak,
+        badges: user.badges,
+        achievements: user.achievements,
       } 
     });
   } catch (err) {
+    console.error('Registration error:', err);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -388,6 +713,21 @@ app.post('/api/login', async (req, res) => {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
+    // Check if this is the first login
+    const isFirstLogin = !user.last_login;
+
+    // Award "Welcome Achievement" on first login if not already awarded
+    if (isFirstLogin && !user.achievements.includes('Welcome Achievement')) {
+      user.achievements.push('Welcome Achievement');
+    }
+
+    // Update streak before updating last_login
+    await updateUserStreak(user);
+
+    // Update last login timestamp
+    user.last_login = new Date();
+    await user.save();
+
     // Create token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
 
@@ -402,10 +742,20 @@ app.post('/api/login', async (req, res) => {
         dept: user.dept,
         section: user.section,
         year: user.year,
-        credit: user.credit
+        role: user.role,
+        credit: user.credit,
+        roll_number: user.roll_number,
+        digital_id: user.digital_id,
+        department: user.department,
+        join_year: user.join_year,
+        streak: user.streak,
+        badges: user.badges,
+        achievements: user.achievements,
+        last_login: user.last_login,
       } 
     });
   } catch (err) {
+    console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
   }
 });
@@ -702,6 +1052,198 @@ app.post('/api/reset-password', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// ----------------------------------------------------- Club Management -----------------------------------------------------------------
+
+// Middleware to check if user is admin
+const adminOnlyMiddleware = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Authorization check failed' });
+  }
+};
+
+// Create club (admin only)
+app.post('/api/clubs', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const {
+      name,
+      logo, // Supabase Storage URL
+      description,
+      subdomains,
+      moderators // Array of { email, type: 'teacher' | 'student' }
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !logo || !description) {
+      return res.status(400).json({ error: 'Name, logo, and description are required' });
+    }
+
+    // Validate moderators
+    if (!moderators || !Array.isArray(moderators)) {
+      return res.status(400).json({ error: 'Moderators array is required' });
+    }
+
+    // Check moderator limits: exactly 1 teacher, max 3 students
+    const teacherModerators = moderators.filter(m => m.type === 'teacher');
+    const studentModerators = moderators.filter(m => m.type === 'student');
+
+    if (teacherModerators.length !== 1) {
+      return res.status(400).json({ error: 'Exactly one teacher moderator is required' });
+    }
+
+    if (studentModerators.length > 3) {
+      return res.status(400).json({ error: 'Maximum 3 student moderators allowed' });
+    }
+
+    // Verify all moderator emails exist in database
+    const moderatorEmails = moderators.map(m => m.email);
+    const existingUsers = await User.find({ email: { $in: moderatorEmails } });
+    
+    if (existingUsers.length !== moderatorEmails.length) {
+      return res.status(400).json({ error: 'One or more moderator emails do not exist' });
+    }
+
+    // Create moderators array with user IDs
+    const moderatorsWithIds = moderators.map(mod => {
+      const user = existingUsers.find(u => u.email === mod.email);
+      return {
+        userId: user._id,
+        type: mod.type
+      };
+    });
+
+    // Create club
+    const club = new Club({
+      name,
+      logo,
+      description,
+      subdomains: subdomains || [],
+      members: [], // Will be populated later
+      moderators: moderatorsWithIds,
+      works_done: [],
+      created_by: req.userId,
+    });
+
+    await club.save();
+
+    res.status(201).json({
+      message: 'Club created successfully',
+      club
+    });
+  } catch (err) {
+    console.error('Club creation error:', err);
+    res.status(500).json({ error: 'Failed to create club' });
+  }
+});
+
+// Update club (moderators only)
+app.put('/api/clubs/:id', authenticateToken, async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const {
+      name,
+      description,
+      subdomains,
+      members,
+      works_done
+    } = req.body;
+
+    // Find club
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ error: 'Club not found' });
+    }
+
+    // Check if user is a moderator
+    const isModerator = club.moderators.some(
+      mod => mod.userId.toString() === req.userId
+    );
+
+    if (!isModerator) {
+      return res.status(403).json({ error: 'Only club moderators can edit this club' });
+    }
+
+    // Update allowed fields
+    if (name) club.name = name;
+    if (description) club.description = description;
+    if (subdomains) club.subdomains = subdomains;
+    if (members) club.members = members;
+    if (works_done) club.works_done = works_done;
+
+    club.updatedAt = new Date();
+    await club.save();
+
+    res.json({
+      message: 'Club updated successfully',
+      club
+    });
+  } catch (err) {
+    console.error('Club update error:', err);
+    res.status(500).json({ error: 'Failed to update club' });
+  }
+});
+
+// Get all clubs
+app.get('/api/clubs', authenticateToken, async (req, res) => {
+  try {
+    const clubs = await Club.find({})
+      .populate('created_by', 'name email')
+      .populate('moderators.userId', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(clubs);
+  } catch (err) {
+    console.error('Fetch clubs error:', err);
+    res.status(500).json({ error: 'Failed to fetch clubs' });
+  }
+});
+
+// Get single club by ID
+app.get('/api/clubs/:id', authenticateToken, async (req, res) => {
+  try {
+    const club = await Club.findById(req.params.id)
+      .populate('created_by', 'name email')
+      .populate('moderators.userId', 'name email role');
+
+    if (!club) {
+      return res.status(404).json({ error: 'Club not found' });
+    }
+
+    res.json(club);
+  } catch (err) {
+    console.error('Fetch club error:', err);
+    res.status(500).json({ error: 'Failed to fetch club' });
+  }
+});
+
+// Check if user can edit club
+app.get('/api/clubs/:id/can-edit', authenticateToken, async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    const userId = req.userId;
+
+    const club = await Club.findById(clubId);
+    if (!club) {
+      return res.status(404).json({ error: 'Club not found' });
+    }
+
+    // Check if user is a moderator
+    const canEdit = club.moderators.some(
+      mod => mod.userId.toString() === userId
+    );
+
+    res.json({ canEdit });
+  } catch (err) {
+    console.error('Check edit permission error:', err);
+    res.status(500).json({ error: 'Failed to check edit permission' });
   }
 });
 

@@ -151,7 +151,8 @@ export const authService = {
 
       // Validate token by fetching fresh user data from backend
       try {
-        const response = await axios.get(`${API_URL}/user/${user.id}`, {
+        const userId = user._id || user.id;
+        const response = await axios.get(`${API_URL}/user/${userId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },

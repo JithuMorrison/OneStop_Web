@@ -1,28 +1,7 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiArrowLeft } from 'react-icons/fi';
-
-const gradePoints = {
-  'O': 10,
-  'A+': 9,
-  'A': 8,
-  'B+': 7,
-  'B': 6,
-  'C+': 5,
-  'C': 4,
-  'D+': 3,
-  'D': 2,
-  'W': 1
-};
-
-const departments = [
-  { value: 'CSE', label: 'Computer Science' },
-  { value: 'ECE', label: 'Electronics & Communication' },
-  { value: 'EEE', label: 'Electrical & Electronics' },
-  { value: 'MECH', label: 'Mechanical' },
-  { value: 'CIVIL', label: 'Civil' },
-];
+import { fetchSubjects, calculateCGPA, gradePoints, getCompletionPercentage, getTotalCredits } from './utils/cgpaCalculator.jsx';
 
 const semesters = [
   { value: '1', label: 'Semester 1' },
@@ -36,64 +15,68 @@ const semesters = [
 ];
 
 export default function CgpaCalc() {
-  const [sem, setSem] = useState('');
-  const [dept, setDept] = useState('');
-  const [subjects, setSubjects] = useState([]);
-  const [grades, setGrades] = useState({});
+  const [user, setUser] = useState(null);
+  const [semester, setSemester] = useState('');
+  const [courses, setCourses] = useState([]);
   const [cgpa, setCgpa] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+  }, []);
 
   const handleBack = () => {
     navigate('/dashboard');
   };
 
   const handleFetch = async () => {
+    if (!user || !semester) {
+      alert('Please select a semester');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const res = await axios.get('http://localhost:5000/api/subjects', {
-        params: { sem, dept }
-      });
-      if (res.data) {
-        setSubjects(res.data.subjects);
-        setGrades({});
-        setCgpa(null);
+      const batchYear = user.join_year || parseInt(user.year);
+      const department = user.dept || user.department;
+      
+      const fetchedCourses = await fetchSubjects(batchYear, department, parseInt(semester));
+      
+      if (fetchedCourses.length === 0) {
+        alert('No subjects found for this semester. Please contact your teacher.');
       }
+      
+      setCourses(fetchedCourses);
+      setCgpa(null);
     } catch (error) {
       console.error("Error fetching subjects:", error);
-      // You might want to add error handling UI here
+      alert(error.message || 'Failed to fetch subjects. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGradeChange = (subject, grade) => {
-    setGrades(prev => ({ ...prev, [subject]: grade }));
+  const handleGradeChange = (courseId, grade) => {
+    setCourses(prevCourses => 
+      prevCourses.map(course => 
+        course.id === courseId ? { ...course, grade } : course
+      )
+    );
   };
 
-  const calculateCGPA = () => {
-    let totalCredits = 0;
-    let totalPoints = 0;
-
-    subjects.forEach(([sub, credits]) => {
-      const grade = grades[sub];
-      if (grade && gradePoints[grade] !== undefined) {
-        totalPoints += gradePoints[grade] * parseInt(credits);
-        totalCredits += parseInt(credits);
-      }
-    });
-
-    if (totalCredits > 0) {
-      const cgpaValue = totalPoints / totalCredits;
-      setCgpa(cgpaValue.toFixed(2));
-    }
+  const handleCalculateCGPA = () => {
+    const calculatedCGPA = calculateCGPA(courses);
+    setCgpa(calculatedCGPA);
   };
 
   // Calculate completion percentage
-  const completedSubjects = subjects.filter(([sub]) => grades[sub]).length;
-  const completionPercentage = subjects.length > 0 
-    ? Math.round((completedSubjects / subjects.length) * 100) 
-    : 0;
+  const completionPercentage = getCompletionPercentage(courses);
+  const totalCredits = getTotalCredits(courses);
+  const completedCourses = courses.filter(c => c.grade).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-800 text-white flex items-center justify-center p-4">
@@ -124,11 +107,17 @@ export default function CgpaCalc() {
             Academic Information
           </h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-1">
+                Batch: {user?.join_year || user?.year} | Department: {user?.dept || user?.department}
+              </label>
+            </div>
             <div>
               <label className="block text-sm font-medium text-white/80 mb-1">Semester</label>
               <select 
-                onChange={e => setSem(e.target.value)}
+                value={semester}
+                onChange={e => setSemester(e.target.value)}
                 className="w-full bg-white/10 backdrop-blur-sm text-white border border-white/20 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
               >
                 <option value="" className='text-black'>Select your semester</option>
@@ -137,26 +126,13 @@ export default function CgpaCalc() {
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-white/80 mb-1">Department</label>
-              <select 
-                onChange={e => setDept(e.target.value)}
-                className="w-full bg-white/10 backdrop-blur-sm text-white border border-white/20 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
-              >
-                <option value="" className='text-black'>Select your department</option>
-                {departments.map(dept => (
-                  <option key={dept.value} value={dept.value} className='text-black'>{dept.label}</option>
-                ))}
-              </select>
-            </div>
           </div>
 
           <div className="mt-6 flex justify-center">
             <button
               onClick={handleFetch}
-              disabled={!sem || !dept || isLoading}
-              className={`relative overflow-hidden px-8 py-3 rounded-full font-medium text-white shadow-lg transition-all duration-300 ${!sem || !dept ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 hover:shadow-xl'}`}
+              disabled={!semester || isLoading}
+              className={`relative overflow-hidden px-8 py-3 rounded-full font-medium text-white shadow-lg transition-all duration-300 ${!semester ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-700 hover:to-blue-600 hover:shadow-xl'}`}
             >
               {isLoading ? (
                 <span className="flex items-center">
@@ -179,7 +155,7 @@ export default function CgpaCalc() {
         </div>
 
         {/* Subjects Section */}
-        {subjects.length > 0 && (
+        {courses.length > 0 && (
           <div className="bg-white/5 p-6 rounded-xl mb-8 border border-white/10">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold flex items-center">
@@ -190,7 +166,7 @@ export default function CgpaCalc() {
               </h2>
               
               <div className="flex items-center">
-                <span className="text-sm text-white/70 mr-2">Progress: {completedSubjects}/{subjects.length}</span>
+                <span className="text-sm text-white/70 mr-2">Progress: {completedCourses}/{courses.length}</span>
                 <div className="w-24 bg-white/10 rounded-full h-2.5">
                   <div 
                     className="bg-gradient-to-r from-green-400 to-cyan-400 h-2.5 rounded-full" 
@@ -201,15 +177,17 @@ export default function CgpaCalc() {
             </div>
 
             <div className="space-y-4">
-              {subjects.map(([subject, credits]) => (
-                <div key={subject} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+              {courses.map((course) => (
+                <div key={course.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
                   <div className="mb-2 sm:mb-0">
-                    <div className="font-medium text-lg">{subject.toUpperCase()}</div>
-                    <div className="text-sm text-white/60">{credits} credit{credits > 1 ? 's' : ''}</div>
+                    <div className="font-medium text-lg">{course.name}</div>
+                    <div className="text-sm text-white/60">
+                      {course.code} | {course.credits} credit{course.credits > 1 ? 's' : ''}
+                    </div>
                   </div>
                   <select
-                    onChange={e => handleGradeChange(subject, e.target.value)}
-                    value={grades[subject] || ''}
+                    onChange={e => handleGradeChange(course.id, e.target.value)}
+                    value={course.grade || ''}
                     className="bg-white/10 backdrop-blur-sm text-white border border-white/20 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 min-w-[180px]"
                   >
                     <option value="" className='text-black'>Select Grade</option>
@@ -223,9 +201,9 @@ export default function CgpaCalc() {
 
             <div className="mt-8 flex justify-center">
               <button
-                onClick={calculateCGPA}
-                disabled={completedSubjects !== subjects.length}
-                className={`relative overflow-hidden px-8 py-3 rounded-full font-medium text-white shadow-lg transition-all duration-300 ${completedSubjects !== subjects.length ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 hover:shadow-xl'}`}
+                onClick={handleCalculateCGPA}
+                disabled={completedCourses !== courses.length}
+                className={`relative overflow-hidden px-8 py-3 rounded-full font-medium text-white shadow-lg transition-all duration-300 ${completedCourses !== courses.length ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 hover:shadow-xl'}`}
               >
                 <span className="flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,17 +229,15 @@ export default function CgpaCalc() {
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div className="bg-white/5 p-3 rounded-lg">
                     <div className="text-sm text-white/70">Subjects</div>
-                    <div className="text-xl font-semibold">{subjects.length}</div>
+                    <div className="text-xl font-semibold">{courses.length}</div>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg">
                     <div className="text-sm text-white/70">Completed</div>
-                    <div className="text-xl font-semibold">{completedSubjects}</div>
+                    <div className="text-xl font-semibold">{completedCourses}</div>
                   </div>
                   <div className="bg-white/5 p-3 rounded-lg">
                     <div className="text-sm text-white/70">Total Credits</div>
-                    <div className="text-xl font-semibold">
-                      {subjects.reduce((sum, [_, credits]) => sum + parseInt(credits), 0)}
-                    </div>
+                    <div className="text-xl font-semibold">{totalCredits}</div>
                   </div>
                 </div>
               </div>
@@ -269,9 +245,9 @@ export default function CgpaCalc() {
               <div className="mt-6 pt-4 border-t border-white/10">
                 <button 
                   onClick={() => {
-                    setSubjects([]);
-                    setGrades({});
+                    setCourses([]);
                     setCgpa(null);
+                    setSemester('');
                   }}
                   className="text-sm text-white/70 hover:text-white transition-colors flex items-center mx-auto"
                 >

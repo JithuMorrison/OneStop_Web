@@ -73,6 +73,7 @@ const UserSchema = new mongoose.Schema({
   contacts: { type: Array, default: [] }, // user IDs
   ods: { type: Array, default: [] }, // OD claim IDs
   last_login: { type: Date },
+  cgpa_data: { type: Object, default: null }, // CGPA calculator data
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
@@ -271,6 +272,40 @@ const Schema = new mongoose.Schema({
 // Define model
 const CgpaModel = mongoose.model('Cgpa', Schema);
 
+// Semester Subject Schema (for teachers to define subjects)
+const SemesterSubjectSchema = new mongoose.Schema({
+  batch_year: { type: Number, required: true }, // 2022, 2023, 2024, etc.
+  department: { type: String, required: true },
+  semester: { type: Number, required: true },
+  subject_name: { type: String, required: true },
+  subject_code: { type: String, required: true },
+  credits: { type: Number, required: true },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const SemesterSubject = mongoose.model('SemesterSubject', SemesterSubjectSchema);
+
+// Exam Timetable Schema (teachers add exam dates for subjects)
+const ExamTimetableSchema = new mongoose.Schema({
+  batch_year: { type: Number, required: true }, // 2022, 2023, 2024, etc.
+  department: { type: String, required: true },
+  semester: { type: Number, required: true },
+  exams: [{ // Array of exam schedules
+    subject_id: { type: mongoose.Schema.Types.ObjectId, ref: 'SemesterSubject', required: true },
+    exam_date: { type: Date, required: true },
+    start_time: { type: String, required: true }, // HH:MM format
+    end_time: { type: String, required: true }, // HH:MM format
+    room: { type: String }
+  }],
+  uploaded_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const ExamTimetable = mongoose.model('ExamTimetable', ExamTimetableSchema);
+
 
 
 // -------------------------------------------------------- API Codes ---------------------------------------------------------------
@@ -289,8 +324,8 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Get first 10 files
-app.get('/api/materials', authenticateToken, async (req, res) => {
+// Get first 10 files (legacy endpoint for old Materials page)
+app.get('/api/files/materials', authenticateToken, async (req, res) => {
   try {
     const files = await File.find({}).sort({ uploadDate: -1 }).limit(10);
     res.json({ files });
@@ -603,6 +638,55 @@ app.post('/api/user/streak', authenticateToken, async (req, res) => {
   }
 });
 
+// API endpoint to save CGPA data to user profile
+app.post('/api/user/cgpa', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const { courses, cgpa, savedAt } = req.body;
+    
+    // Store CGPA data in user profile
+    user.cgpa_data = {
+      courses,
+      cgpa,
+      savedAt: savedAt || new Date()
+    };
+    
+    user.updatedAt = new Date();
+    await user.save();
+    
+    res.json({
+      message: 'CGPA data saved successfully',
+      cgpa_data: user.cgpa_data
+    });
+  } catch (err) {
+    console.error('CGPA save error:', err);
+    res.status(500).json({ error: 'Failed to save CGPA data' });
+  }
+});
+
+// API endpoint to get CGPA data from user profile
+app.get('/api/user/cgpa', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      cgpa_data: user.cgpa_data || null
+    });
+  } catch (err) {
+    console.error('CGPA fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch CGPA data' });
+  }
+});
+
 // Routes
 app.post('/api/register', async (req, res) => {
   try {
@@ -627,6 +711,11 @@ app.post('/api/register', async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
+
+    // // Only admin can create teacher accounts
+    // if (role === 'teacher' && req.user?.role !== 'admin') {
+    //   return res.status(403).json({ error: 'Unauthorized to create teacher account' });
+    // }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -775,6 +864,36 @@ app.get('/api/user/:id', authenticateToken, async (req, res) => {
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+// Update user profile
+app.put('/api/user/:id', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const currentUserId = req.userId;
+
+    // Users can only update their own profile
+    if (userId !== currentUserId) {
+      return res.status(403).json({ error: 'Cannot update another user\'s profile' });
+    }
+
+    // Prevent updating sensitive fields
+    const { password, email, role, _id, ...updates } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updates },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -940,6 +1059,27 @@ app.post('/api/chat/:chatId/message', authenticateToken, async (req, res) => {
         }
       }
     }, { new: true });
+
+    // Create notification for recipient(s)
+    try {
+      const sender = await User.findById(req.userId).select('name username');
+      const recipients = chat.participants.filter(p => p.toString() !== req.userId);
+      
+      const notifications = recipients.map(recipientId => ({
+        user_id: recipientId,
+        type: 'message',
+        content: `New message from ${sender.name || sender.username}`,
+        related_id: chatId,
+        read: false
+      }));
+
+      if (notifications.length > 0) {
+        await Notification.insertMany(notifications);
+      }
+    } catch (notifErr) {
+      console.error('Notification creation error:', notifErr);
+      // Don't fail the message send if notification creation fails
+    }
 
     res.json(chat);
   } catch (err) {
@@ -1244,6 +1384,1765 @@ app.get('/api/clubs/:id/can-edit', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Check edit permission error:', err);
     res.status(500).json({ error: 'Failed to check edit permission' });
+  }
+});
+
+// ============================================ ANNOUNCEMENT ROUTES ============================================
+
+// Create announcement
+app.post('/api/announcements', authenticateToken, async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      category,
+      image, // Supabase Storage URL
+      additional_images,
+      hashtag,
+      registration_enabled,
+      registration_fields
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !category || !image || !hashtag) {
+      return res.status(400).json({ error: 'Title, description, category, image, and hashtag are required' });
+    }
+
+    // Create announcement
+    const announcement = new Announcement({
+      title,
+      description,
+      category,
+      image,
+      additional_images: additional_images || [],
+      hashtag,
+      created_by: req.userId,
+      registration_enabled: registration_enabled || false,
+      registration_fields: registration_fields || [],
+      registrations: []
+    });
+
+    await announcement.save();
+
+    // Add announcement ID to user's announcements array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $push: { announcements: announcement._id } }
+    );
+
+    // Parse hashtag and create event
+    try {
+      // Extract event info from hashtag format: #type_eventName_startDate_endDate
+      const hashtagParts = hashtag.replace('#', '').split('_');
+      if (hashtagParts.length === 4) {
+        const [type, eventName, startDateStr, endDateStr] = hashtagParts;
+        
+        // Parse dates (dd-mm-yyyy format)
+        const parseDate = (dateStr) => {
+          const [day, month, year] = dateStr.split('-').map(Number);
+          return new Date(year, month - 1, day);
+        };
+
+        const startDate = parseDate(startDateStr);
+        const endDate = parseDate(endDateStr);
+
+        // Create event
+        const event = new Event({
+          name: eventName,
+          type: type,
+          start_date: startDate,
+          end_date: endDate,
+          source_type: 'announcement',
+          source_id: announcement._id
+        });
+
+        await event.save();
+      }
+    } catch (eventErr) {
+      console.error('Event creation error:', eventErr);
+      // Don't fail the announcement creation if event creation fails
+    }
+
+    // Create notifications for all users (announcement broadcast)
+    try {
+      const allUsers = await User.find({}, '_id');
+      const notifications = allUsers.map(user => ({
+        user_id: user._id,
+        type: 'announcement',
+        content: `New announcement: ${title}`,
+        related_id: announcement._id,
+        read: false
+      }));
+
+      await Notification.insertMany(notifications);
+    } catch (notifErr) {
+      console.error('Notification creation error:', notifErr);
+      // Don't fail the announcement creation if notification creation fails
+    }
+
+    res.status(201).json({
+      message: 'Announcement created successfully',
+      announcement
+    });
+  } catch (err) {
+    console.error('Announcement creation error:', err);
+    res.status(500).json({ error: 'Failed to create announcement' });
+  }
+});
+
+// Get announcements with optional category filter
+app.get('/api/announcements', authenticateToken, async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    const filter = {};
+    if (category) {
+      filter.category = category;
+    }
+
+    const announcements = await Announcement.find(filter)
+      .populate('created_by', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(announcements);
+  } catch (err) {
+    console.error('Fetch announcements error:', err);
+    res.status(500).json({ error: 'Failed to fetch announcements' });
+  }
+});
+
+// Get announcements by user (for teacher dashboard)
+app.get('/api/announcements/user/:userId', authenticateToken, async (req, res) => {
+  try {
+    const announcements = await Announcement.find({ created_by: req.params.userId })
+      .populate('created_by', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(announcements);
+  } catch (err) {
+    console.error('Fetch user announcements error:', err);
+    res.status(500).json({ error: 'Failed to fetch user announcements' });
+  }
+});
+
+// Get followed announcements (for student dashboard)
+app.get('/api/announcements/followed', authenticateToken, async (req, res) => {
+  try {
+    // Get current user's following list
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get announcements from followed users
+    const announcements = await Announcement.find({ 
+      created_by: { $in: user.following } 
+    })
+      .populate('created_by', 'name email role')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json(announcements);
+  } catch (err) {
+    console.error('Fetch followed announcements error:', err);
+    res.status(500).json({ error: 'Failed to fetch followed announcements' });
+  }
+});
+
+// Register for announcement
+app.post('/api/announcements/:id/register', authenticateToken, async (req, res) => {
+  try {
+    const announcementId = req.params.id;
+    const userId = req.userId;
+    const registrationData = req.body;
+
+    // Find announcement
+    const announcement = await Announcement.findById(announcementId);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    // Check if registration is enabled
+    if (!announcement.registration_enabled) {
+      return res.status(400).json({ error: 'Registration is not enabled for this announcement' });
+    }
+
+    // Check if user already registered
+    const existingRegistration = await Registration.findOne({
+      announcement_id: announcementId,
+      user_id: userId
+    });
+
+    if (existingRegistration) {
+      return res.status(400).json({ error: 'You have already registered for this announcement' });
+    }
+
+    // Create registration
+    const registration = new Registration({
+      announcement_id: announcementId,
+      user_id: userId,
+      data: registrationData,
+      badge_issued: false
+    });
+
+    await registration.save();
+
+    // Add registration ID to announcement
+    await Announcement.findByIdAndUpdate(
+      announcementId,
+      { $push: { registrations: registration._id } }
+    );
+
+    // Add announcement ID to user's registered_events
+    await User.findByIdAndUpdate(
+      userId,
+      { $push: { registered_events: announcementId } }
+    );
+
+    res.status(201).json({
+      message: 'Registration successful',
+      registration
+    });
+  } catch (err) {
+    console.error('Registration error:', err);
+    res.status(500).json({ error: 'Failed to register for announcement' });
+  }
+});
+
+// Get registrations for announcement (creator only)
+app.get('/api/announcements/:id/registrations', authenticateToken, async (req, res) => {
+  try {
+    const announcementId = req.params.id;
+
+    // Find announcement
+    const announcement = await Announcement.findById(announcementId);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    // Check if user is the creator
+    if (announcement.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only the announcement creator can view registrations' });
+    }
+
+    // Get all registrations
+    const registrations = await Registration.find({ announcement_id: announcementId })
+      .populate('user_id', 'name email roll_number department');
+
+    res.json(registrations);
+  } catch (err) {
+    console.error('Fetch registrations error:', err);
+    res.status(500).json({ error: 'Failed to fetch registrations' });
+  }
+});
+
+// Issue badges to participants
+app.post('/api/announcements/:id/badges', authenticateToken, async (req, res) => {
+  try {
+    const announcementId = req.params.id;
+    const { userIds, badge } = req.body;
+
+    // Validate input
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'User IDs array is required' });
+    }
+
+    if (!badge || typeof badge !== 'string') {
+      return res.status(400).json({ error: 'Badge name is required' });
+    }
+
+    // Find announcement
+    const announcement = await Announcement.findById(announcementId);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    // Check if user is the creator
+    if (announcement.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only the announcement creator can issue badges' });
+    }
+
+    // Issue badges to all specified users
+    await User.updateMany(
+      { _id: { $in: userIds } },
+      { $addToSet: { badges: badge } }
+    );
+
+    // Mark badges as issued in registrations
+    await Registration.updateMany(
+      { 
+        announcement_id: announcementId,
+        user_id: { $in: userIds }
+      },
+      { badge_issued: true }
+    );
+
+    res.json({
+      message: 'Badges issued successfully',
+      count: userIds.length
+    });
+  } catch (err) {
+    console.error('Badge issuance error:', err);
+    res.status(500).json({ error: 'Failed to issue badges' });
+  }
+});
+
+// ============================================ POST ROUTES ============================================
+
+// Create post
+app.post('/api/posts', authenticateToken, async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      image, // Supabase Storage URL (optional)
+      visibility,
+      hashtags
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !visibility) {
+      return res.status(400).json({ error: 'Title, description, and visibility are required' });
+    }
+
+    // Validate visibility value
+    if (!['students', 'teachers', 'everyone'].includes(visibility)) {
+      return res.status(400).json({ error: 'Invalid visibility value' });
+    }
+
+    // Create post
+    const post = new Post({
+      title,
+      description,
+      image: image || null,
+      visibility,
+      hashtags: hashtags || [],
+      created_by: req.userId,
+      likes: 0,
+      liked_by: [],
+      comments: []
+    });
+
+    await post.save();
+
+    // Add post ID to user's posts array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $push: { posts: post._id } }
+    );
+
+    // Populate creator info before sending response
+    await post.populate('created_by', 'name email role username');
+
+    res.status(201).json({
+      message: 'Post created successfully',
+      post
+    });
+  } catch (err) {
+    console.error('Post creation error:', err);
+    res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// Get posts with role-based filtering
+app.get('/api/posts', authenticateToken, async (req, res) => {
+  try {
+    const { hashtags } = req.query;
+
+    // Get current user to determine role
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Build filter based on user role
+    let visibilityFilter;
+    if (user.role === 'student') {
+      // Students see 'students' and 'everyone' posts
+      visibilityFilter = { visibility: { $in: ['students', 'everyone'] } };
+    } else if (user.role === 'teacher') {
+      // Teachers see 'teachers' and 'everyone' posts
+      visibilityFilter = { visibility: { $in: ['teachers', 'everyone'] } };
+    } else {
+      // Admin sees all posts
+      visibilityFilter = {};
+    }
+
+    // Add hashtag filter if provided
+    const filter = { ...visibilityFilter };
+    if (hashtags) {
+      const hashtagArray = Array.isArray(hashtags) ? hashtags : [hashtags];
+      filter.hashtags = { $in: hashtagArray };
+    }
+
+    const posts = await Post.find(filter)
+      .populate('created_by', 'name email role username')
+      .sort({ createdAt: -1 });
+
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch posts error:', err);
+    res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// Get posts by user (for profile page)
+app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
+  try {
+    const posts = await Post.find({ created_by: req.params.userId })
+      .populate('created_by', 'name email role username')
+      .sort({ createdAt: -1 });
+
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch user posts error:', err);
+    res.status(500).json({ error: 'Failed to fetch user posts' });
+  }
+});
+
+// Get followed posts (for student dashboard)
+app.get('/api/posts/followed', authenticateToken, async (req, res) => {
+  try {
+    // Get current user's following list
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get posts from followed users with visibility check
+    let visibilityFilter;
+    if (user.role === 'student') {
+      visibilityFilter = { visibility: { $in: ['students', 'everyone'] } };
+    } else if (user.role === 'teacher') {
+      visibilityFilter = { visibility: { $in: ['teachers', 'everyone'] } };
+    } else {
+      visibilityFilter = {};
+    }
+
+    const posts = await Post.find({ 
+      created_by: { $in: user.following },
+      ...visibilityFilter
+    })
+      .populate('created_by', 'name email role username')
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    res.json(posts);
+  } catch (err) {
+    console.error('Fetch followed posts error:', err);
+    res.status(500).json({ error: 'Failed to fetch followed posts' });
+  }
+});
+
+// Share post with contacts
+app.post('/api/posts/:id/share', authenticateToken, async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const { contactIds } = req.body;
+
+    // Validate input
+    if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: 'Contact IDs array is required' });
+    }
+
+    // Find post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Create notifications for each contact
+    const notifications = contactIds.map(contactId => ({
+      user_id: contactId,
+      type: 'message',
+      content: `${req.userId} shared a post with you: ${post.title}`,
+      related_id: postId,
+      read: false
+    }));
+
+    await Notification.insertMany(notifications);
+
+    // Add contacts to sender's contacts array if not already present
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $addToSet: { contacts: { $each: contactIds } } }
+    );
+
+    res.json({
+      message: 'Post shared successfully',
+      sharedWith: contactIds.length
+    });
+  } catch (err) {
+    console.error('Share post error:', err);
+    res.status(500).json({ error: 'Failed to share post' });
+  }
+});
+
+// Get single post by ID
+app.get('/api/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id)
+      .populate('created_by', 'name email role username');
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check visibility permissions
+    const user = await User.findById(req.userId);
+    if (user.role === 'student' && !['students', 'everyone'].includes(post.visibility)) {
+      return res.status(403).json({ error: 'You do not have permission to view this post' });
+    }
+    if (user.role === 'teacher' && !['teachers', 'everyone'].includes(post.visibility)) {
+      return res.status(403).json({ error: 'You do not have permission to view this post' });
+    }
+
+    res.json(post);
+  } catch (err) {
+    console.error('Fetch post error:', err);
+    res.status(500).json({ error: 'Failed to fetch post' });
+  }
+});
+
+// ============================================ MATERIAL ROUTES ============================================
+
+// Create/upload material
+app.post('/api/materials', authenticateToken, async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      file_url, // Supabase Storage URL (optional)
+      external_link // External link (optional)
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Title and description are required' });
+    }
+
+    // At least one of file_url or external_link must be provided
+    if (!file_url && !external_link) {
+      return res.status(400).json({ error: 'Either file URL or external link is required' });
+    }
+
+    // Create material
+    const material = new Material({
+      title,
+      description,
+      file_url: file_url || null,
+      external_link: external_link || null,
+      uploaded_by: req.userId,
+      likes: 0,
+      liked_by: [],
+      comments: []
+    });
+
+    await material.save();
+
+    // Add material ID to user's materials array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $push: { materials: material._id } }
+    );
+
+    // Populate uploader info before sending response
+    await material.populate('uploaded_by', 'name email role username');
+
+    res.status(201).json({
+      message: 'Material uploaded successfully',
+      material
+    });
+  } catch (err) {
+    console.error('Material upload error:', err);
+    res.status(500).json({ error: 'Failed to upload material' });
+  }
+});
+
+// Get all materials
+app.get('/api/materials', authenticateToken, async (req, res) => {
+  try {
+    const materials = await Material.find({})
+      .populate('uploaded_by', 'name email role username')
+      .sort({ createdAt: -1 });
+
+    res.json(materials);
+  } catch (err) {
+    console.error('Fetch materials error:', err);
+    res.status(500).json({ error: 'Failed to fetch materials' });
+  }
+});
+
+// Get materials by user (for profile page)
+app.get('/api/materials/user/:userId', authenticateToken, async (req, res) => {
+  try {
+    const materials = await Material.find({ uploaded_by: req.params.userId })
+      .populate('uploaded_by', 'name email role username')
+      .sort({ createdAt: -1 });
+
+    res.json(materials);
+  } catch (err) {
+    console.error('Fetch user materials error:', err);
+    res.status(500).json({ error: 'Failed to fetch user materials' });
+  }
+});
+
+// Share material with contacts
+app.post('/api/materials/:id/share', authenticateToken, async (req, res) => {
+  try {
+    const materialId = req.params.id;
+    const { contactIds } = req.body;
+
+    // Validate input
+    if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: 'Contact IDs array is required' });
+    }
+
+    // Find material
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    // Create notifications for each contact
+    const notifications = contactIds.map(contactId => ({
+      user_id: contactId,
+      type: 'message',
+      content: `${req.userId} shared a material with you: ${material.title}`,
+      related_id: materialId,
+      read: false
+    }));
+
+    await Notification.insertMany(notifications);
+
+    // Add contacts to sender's contacts array if not already present
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $addToSet: { contacts: { $each: contactIds } } }
+    );
+
+    res.json({
+      message: 'Material shared successfully',
+      sharedWith: contactIds.length
+    });
+  } catch (err) {
+    console.error('Share material error:', err);
+    res.status(500).json({ error: 'Failed to share material' });
+  }
+});
+
+// Get single material by ID
+app.get('/api/materials/:id', authenticateToken, async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id)
+      .populate('uploaded_by', 'name email role username');
+
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    res.json(material);
+  } catch (err) {
+    console.error('Fetch material error:', err);
+    res.status(500).json({ error: 'Failed to fetch material' });
+  }
+});
+
+// ----------------------------------------------------- Like and Comment Interactions -----------------------------------------------------------------
+
+// Like content (works for announcements, posts, materials)
+app.post('/api/:contentType/:id/like', authenticateToken, async (req, res) => {
+  try {
+    const { contentType, id } = req.params;
+    const userId = req.userId;
+
+    // Determine the model based on content type
+    let Model;
+    if (contentType === 'announcements') {
+      Model = Announcement;
+    } else if (contentType === 'posts') {
+      Model = Post;
+    } else if (contentType === 'materials') {
+      Model = Material;
+    } else {
+      return res.status(400).json({ error: 'Invalid content type' });
+    }
+
+    // Find the content
+    const content = await Model.findById(id);
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    // Check if user already liked
+    const alreadyLiked = content.liked_by.includes(userId);
+
+    if (alreadyLiked) {
+      // Unlike: remove from liked_by and decrement likes
+      content.liked_by = content.liked_by.filter(id => id.toString() !== userId.toString());
+      content.likes = Math.max(0, content.likes - 1);
+    } else {
+      // Like: add to liked_by and increment likes
+      content.liked_by.push(userId);
+      content.likes += 1;
+    }
+
+    content.updatedAt = Date.now();
+    await content.save();
+
+    // Update user's liked array
+    const user = await User.findById(userId);
+    if (user) {
+      if (alreadyLiked) {
+        user.liked = user.liked.filter(contentId => contentId.toString() !== id.toString());
+      } else {
+        if (!user.liked.includes(id)) {
+          user.liked.push(id);
+        }
+      }
+      await user.save();
+    }
+
+    // Create notification for content creator (only when liking, not unliking)
+    if (!alreadyLiked && content.created_by && content.created_by.toString() !== userId) {
+      try {
+        const notification = new Notification({
+          user_id: content.created_by,
+          type: 'like',
+          content: `${user.name || user.username} liked your ${contentType.slice(0, -1)}`,
+          related_id: id,
+          read: false
+        });
+        await notification.save();
+      } catch (notifErr) {
+        console.error('Notification creation error:', notifErr);
+        // Don't fail the like action if notification creation fails
+      }
+    }
+
+    res.json({
+      success: true,
+      liked: !alreadyLiked,
+      likes: content.likes,
+      message: alreadyLiked ? 'Content unliked' : 'Content liked'
+    });
+  } catch (err) {
+    console.error('Like content error:', err);
+    res.status(500).json({ error: 'Failed to like content' });
+  }
+});
+
+// Add comment to content (works for announcements, posts, materials)
+app.post('/api/:contentType/:id/comment', authenticateToken, async (req, res) => {
+  try {
+    const { contentType, id } = req.params;
+    const { content: commentContent } = req.body;
+    const userId = req.userId;
+
+    if (!commentContent || !commentContent.trim()) {
+      return res.status(400).json({ error: 'Comment content is required' });
+    }
+
+    // Determine the model based on content type
+    let Model;
+    if (contentType === 'announcements') {
+      Model = Announcement;
+    } else if (contentType === 'posts') {
+      Model = Post;
+    } else if (contentType === 'materials') {
+      Model = Material;
+    } else {
+      return res.status(400).json({ error: 'Invalid content type' });
+    }
+
+    // Find the content
+    const content = await Model.findById(id);
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    // Get user info for comment
+    const user = await User.findById(userId).select('name username');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Create comment object
+    const comment = {
+      id: new mongoose.Types.ObjectId().toString(),
+      content: commentContent.trim(),
+      userId: userId,
+      userName: user.name || user.username,
+      createdAt: new Date()
+    };
+
+    // Add comment to content
+    content.comments.push(comment);
+    content.updatedAt = Date.now();
+    await content.save();
+
+    // Create notification for content creator (if not commenting on own content)
+    if (content.created_by && content.created_by.toString() !== userId) {
+      try {
+        const notification = new Notification({
+          user_id: content.created_by,
+          type: 'comment',
+          content: `${user.name || user.username} commented on your ${contentType.slice(0, -1)}`,
+          related_id: id,
+          read: false
+        });
+        await notification.save();
+      } catch (notifErr) {
+        console.error('Notification creation error:', notifErr);
+        // Don't fail the comment action if notification creation fails
+      }
+    }
+
+    res.json({
+      success: true,
+      comment: comment,
+      message: 'Comment added successfully'
+    });
+  } catch (err) {
+    console.error('Add comment error:', err);
+    res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// ============================================ OD CLAIM ROUTES ============================================
+
+// Create OD claim (students only)
+app.post('/api/od-claims', authenticateToken, async (req, res) => {
+  try {
+    const {
+      event_id,
+      event_name,
+      teacher_id,
+      description
+    } = req.body;
+
+    // Validate required fields
+    if (!event_name || !teacher_id || !description) {
+      return res.status(400).json({ error: 'Event name, teacher ID, and description are required' });
+    }
+
+    // Get current user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only students can create OD claims
+    if (user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can create OD claims' });
+    }
+
+    // Verify teacher exists
+    const teacher = await User.findById(teacher_id);
+    if (!teacher || teacher.role !== 'teacher') {
+      return res.status(400).json({ error: 'Invalid teacher ID' });
+    }
+
+    // Create OD claim
+    const odClaim = new ODClaim({
+      student_id: req.userId,
+      event_id: event_id || null,
+      event_name,
+      teacher_id,
+      description,
+      status: 'pending'
+    });
+
+    await odClaim.save();
+
+    // Add OD claim ID to student's ods array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $push: { ods: odClaim._id } }
+    );
+
+    // Populate student and teacher info before sending response
+    await odClaim.populate('student_id', 'name email roll_number');
+    await odClaim.populate('teacher_id', 'name email');
+
+    res.status(201).json({
+      message: 'OD claim created successfully',
+      odClaim
+    });
+  } catch (err) {
+    console.error('OD claim creation error:', err);
+    res.status(500).json({ error: 'Failed to create OD claim' });
+  }
+});
+
+// Get student's OD claims
+app.get('/api/od-claims/student/:studentId', authenticateToken, async (req, res) => {
+  try {
+    const studentId = req.params.studentId;
+
+    // Users can only view their own OD claims (unless admin)
+    const user = await User.findById(req.userId);
+    if (user.role !== 'admin' && req.userId !== studentId) {
+      return res.status(403).json({ error: 'You can only view your own OD claims' });
+    }
+
+    const odClaims = await ODClaim.find({ student_id: studentId })
+      .populate('student_id', 'name email roll_number')
+      .populate('teacher_id', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(odClaims);
+  } catch (err) {
+    console.error('Fetch student OD claims error:', err);
+    res.status(500).json({ error: 'Failed to fetch student OD claims' });
+  }
+});
+
+// Get teacher's OD claims with optional status filter
+app.get('/api/od-claims/teacher/:teacherId', authenticateToken, async (req, res) => {
+  try {
+    const teacherId = req.params.teacherId;
+    const { status } = req.query;
+
+    // Teachers can only view their own OD claims (unless admin)
+    const user = await User.findById(req.userId);
+    if (user.role !== 'admin' && req.userId !== teacherId) {
+      return res.status(403).json({ error: 'You can only view your own OD claims' });
+    }
+
+    // Build filter
+    const filter = { teacher_id: teacherId };
+    if (status && ['pending', 'accepted', 'rejected'].includes(status)) {
+      filter.status = status;
+    }
+
+    const odClaims = await ODClaim.find(filter)
+      .populate('student_id', 'name email roll_number')
+      .populate('teacher_id', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(odClaims);
+  } catch (err) {
+    console.error('Fetch teacher OD claims error:', err);
+    res.status(500).json({ error: 'Failed to fetch teacher OD claims' });
+  }
+});
+
+// Update OD claim status (teachers only)
+app.put('/api/od-claims/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const odClaimId = req.params.id;
+    const { status } = req.body;
+
+    // Validate status
+    if (!status || !['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be either "accepted" or "rejected"' });
+    }
+
+    // Find OD claim
+    const odClaim = await ODClaim.findById(odClaimId);
+    if (!odClaim) {
+      return res.status(404).json({ error: 'OD claim not found' });
+    }
+
+    // Get current user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only the tagged teacher can update the status
+    if (user.role !== 'teacher' || odClaim.teacher_id.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only the tagged teacher can update OD claim status' });
+    }
+
+    // Update status
+    odClaim.status = status;
+    odClaim.updatedAt = new Date();
+    await odClaim.save();
+
+    // Create notification for student
+    const notification = new Notification({
+      user_id: odClaim.student_id,
+      type: 'od_status',
+      content: `Your OD claim for "${odClaim.event_name}" has been ${status}`,
+      related_id: odClaimId,
+      read: false
+    });
+
+    await notification.save();
+
+    // Populate student and teacher info before sending response
+    await odClaim.populate('student_id', 'name email roll_number');
+    await odClaim.populate('teacher_id', 'name email');
+
+    res.json({
+      message: `OD claim ${status} successfully`,
+      odClaim
+    });
+  } catch (err) {
+    console.error('Update OD claim status error:', err);
+    res.status(500).json({ error: 'Failed to update OD claim status' });
+  }
+});
+
+// ============================================ EVENT AND EXAM SCHEDULE ROUTES ============================================
+
+// Create exam schedule (teachers only)
+app.post('/api/exam-schedules', authenticateToken, async (req, res) => {
+  try {
+    const {
+      exam_name,
+      date,
+      year,
+      semester,
+      number_of_exams
+    } = req.body;
+
+    // Validate required fields
+    if (!exam_name || !date || !year || !semester || !number_of_exams) {
+      return res.status(400).json({ error: 'All fields are required: exam_name, date, year, semester, number_of_exams' });
+    }
+
+    // Get current user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only teachers can create exam schedules
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can create exam schedules' });
+    }
+
+    // Create exam schedule
+    const examSchedule = new ExamSchedule({
+      exam_name,
+      date: new Date(date),
+      year,
+      semester,
+      number_of_exams,
+      created_by: req.userId
+    });
+
+    await examSchedule.save();
+
+    // Create corresponding event
+    const event = new Event({
+      name: exam_name,
+      type: 'exam',
+      start_date: new Date(date),
+      end_date: new Date(date), // Exams are single-day events
+      source_type: 'exam_schedule',
+      source_id: examSchedule._id
+    });
+
+    await event.save();
+
+    // Populate creator info before sending response
+    await examSchedule.populate('created_by', 'name email role');
+
+    res.status(201).json({
+      message: 'Exam schedule created successfully',
+      examSchedule,
+      event
+    });
+  } catch (err) {
+    console.error('Exam schedule creation error:', err);
+    res.status(500).json({ error: 'Failed to create exam schedule' });
+  }
+});
+
+// Get all events with optional date range filtering
+app.get('/api/events', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    let filter = {};
+
+    // Add date range filter if provided
+    if (startDate || endDate) {
+      filter.$or = [];
+      
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        // Find events that overlap with the date range
+        filter.$or = [
+          // Event starts within range
+          { start_date: { $gte: start, $lte: end } },
+          // Event ends within range
+          { end_date: { $gte: start, $lte: end } },
+          // Event spans the entire range
+          { start_date: { $lte: start }, end_date: { $gte: end } }
+        ];
+      } else if (startDate) {
+        const start = new Date(startDate);
+        filter.end_date = { $gte: start };
+      } else if (endDate) {
+        const end = new Date(endDate);
+        filter.start_date = { $lte: end };
+      }
+    }
+
+    const events = await Event.find(filter)
+      .sort({ start_date: 1 });
+
+    res.json(events);
+  } catch (err) {
+    console.error('Fetch events error:', err);
+    res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+// Get events for a specific date
+app.get('/api/events/date/:date', authenticateToken, async (req, res) => {
+  try {
+    const dateParam = req.params.date;
+    const targetDate = new Date(dateParam);
+
+    // Set to start of day
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    // Set to end of day
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Find events that occur on this date
+    const events = await Event.find({
+      $or: [
+        // Event starts on this date
+        { start_date: { $gte: startOfDay, $lte: endOfDay } },
+        // Event ends on this date
+        { end_date: { $gte: startOfDay, $lte: endOfDay } },
+        // Event spans this date
+        { start_date: { $lte: startOfDay }, end_date: { $gte: endOfDay } }
+      ]
+    }).sort({ start_date: 1 });
+
+    res.json(events);
+  } catch (err) {
+    console.error('Fetch events for date error:', err);
+    res.status(500).json({ error: 'Failed to fetch events for date' });
+  }
+});
+
+// Get upcoming events (for dashboards)
+app.get('/api/events/upcoming', authenticateToken, async (req, res) => {
+  try {
+    const now = new Date();
+    
+    const events = await Event.find({
+      start_date: { $gte: now }
+    })
+    .sort({ start_date: 1 })
+    .limit(10);
+
+    res.json(events);
+  } catch (err) {
+    console.error('Fetch upcoming events error:', err);
+    res.status(500).json({ error: 'Failed to fetch upcoming events' });
+  }
+});
+
+// Get events created by a specific teacher (for teacher dashboard)
+app.get('/api/events/teacher/:teacherId', authenticateToken, async (req, res) => {
+  try {
+    const teacherId = req.params.teacherId;
+
+    // Find all exam schedules created by this teacher
+    const examSchedules = await ExamSchedule.find({ created_by: teacherId });
+    const examScheduleIds = examSchedules.map(es => es._id);
+
+    // Find all announcements created by this teacher
+    const announcements = await Announcement.find({ created_by: teacherId });
+    const announcementIds = announcements.map(a => a._id);
+
+    // Find events from both sources
+    const events = await Event.find({
+      $or: [
+        { source_type: 'exam_schedule', source_id: { $in: examScheduleIds } },
+        { source_type: 'announcement', source_id: { $in: announcementIds } }
+      ]
+    }).sort({ start_date: 1 });
+
+    res.json(events);
+  } catch (err) {
+    console.error('Fetch teacher events error:', err);
+    res.status(500).json({ error: 'Failed to fetch teacher events' });
+  }
+});
+
+// Get all exam schedules
+app.get('/api/exam-schedules', authenticateToken, async (req, res) => {
+  try {
+    const examSchedules = await ExamSchedule.find({})
+      .populate('created_by', 'name email role')
+      .sort({ date: 1 });
+
+    res.json(examSchedules);
+  } catch (err) {
+    console.error('Fetch exam schedules error:', err);
+    res.status(500).json({ error: 'Failed to fetch exam schedules' });
+  }
+});
+
+// ----------------------------------------------------- Portal and Tool Management -----------------------------------------------------------------
+
+// Create portal (admin only)
+app.post('/api/portals', authenticateToken, adminMiddleware, async (req, res) => {
+  try {
+    const { title, description, external_link } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !external_link) {
+      return res.status(400).json({ error: 'Title, description, and external link are required' });
+    }
+
+    const portal = new Portal({
+      title,
+      description,
+      external_link,
+      created_by: req.user.userId
+    });
+
+    await portal.save();
+    res.status(201).json(portal);
+  } catch (err) {
+    console.error('Create portal error:', err);
+    res.status(500).json({ error: 'Failed to create portal' });
+  }
+});
+
+// Get all portals
+app.get('/api/portals', authenticateToken, async (req, res) => {
+  try {
+    const portals = await Portal.find({})
+      .populate('created_by', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(portals);
+  } catch (err) {
+    console.error('Fetch portals error:', err);
+    res.status(500).json({ error: 'Failed to fetch portals' });
+  }
+});
+
+// Create tool (admin only)
+app.post('/api/tools', authenticateToken, adminMiddleware, async (req, res) => {
+  try {
+    const { title, description, external_link } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !external_link) {
+      return res.status(400).json({ error: 'Title, description, and external link are required' });
+    }
+
+    const tool = new Tool({
+      title,
+      description,
+      external_link,
+      created_by: req.user.userId
+    });
+
+    await tool.save();
+    res.status(201).json(tool);
+  } catch (err) {
+    console.error('Create tool error:', err);
+    res.status(500).json({ error: 'Failed to create tool' });
+  }
+});
+
+// Get all tools
+app.get('/api/tools', authenticateToken, async (req, res) => {
+  try {
+    const tools = await Tool.find({})
+      .populate('created_by', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(tools);
+  } catch (err) {
+    console.error('Fetch tools error:', err);
+    res.status(500).json({ error: 'Failed to fetch tools' });
+  }
+});
+
+// ----------------------------------------------------- Query Endpoints -----------------------------------------------------------------
+
+// Submit a query (students and teachers)
+app.post('/api/queries', authenticateToken, async (req, res) => {
+  try {
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({ error: 'Title and description are required' });
+    }
+
+    // Only students and teachers can submit queries
+    if (req.user.role === 'admin') {
+      return res.status(403).json({ error: 'Admins cannot submit queries' });
+    }
+
+    const query = new Query({
+      title,
+      description,
+      submitted_by: req.user.userId,
+      submitter_role: req.user.role,
+      status: 'pending'
+    });
+
+    await query.save();
+
+    // Create notification for admin
+    const adminUser = await User.findOne({ role: 'admin' });
+    if (adminUser) {
+      const notification = new Notification({
+        user_id: adminUser._id,
+        type: 'query_response',
+        content: `New query submitted: ${title}`,
+        related_id: query._id
+      });
+      await notification.save();
+    }
+
+    res.status(201).json(query);
+  } catch (err) {
+    console.error('Submit query error:', err);
+    res.status(500).json({ error: 'Failed to submit query' });
+  }
+});
+
+// Get user's queries
+app.get('/api/queries/user/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Users can only view their own queries
+    if (req.user.userId !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const queries = await Query.find({ submitted_by: userId })
+      .sort({ createdAt: -1 });
+
+    res.json(queries);
+  } catch (err) {
+    console.error('Fetch user queries error:', err);
+    res.status(500).json({ error: 'Failed to fetch queries' });
+  }
+});
+
+// Get all queries (admin only)
+app.get('/api/queries', authenticateToken, adminMiddleware, async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    const filter = {};
+    if (status) {
+      filter.status = status;
+    }
+
+    const queries = await Query.find(filter)
+      .populate('submitted_by', 'name email role')
+      .sort({ createdAt: -1 });
+
+    res.json(queries);
+  } catch (err) {
+    console.error('Fetch all queries error:', err);
+    res.status(500).json({ error: 'Failed to fetch queries' });
+  }
+});
+
+// Respond to a query (admin only)
+app.put('/api/queries/:id/respond', authenticateToken, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { response } = req.body;
+
+    if (!response) {
+      return res.status(400).json({ error: 'Response is required' });
+    }
+
+    const query = await Query.findById(id);
+    if (!query) {
+      return res.status(404).json({ error: 'Query not found' });
+    }
+
+    query.status = 'responded';
+    query.response = response;
+    query.responded_at = new Date();
+    await query.save();
+
+    // Create notification for submitter
+    const notification = new Notification({
+      user_id: query.submitted_by,
+      type: 'query_response',
+      content: `Your query "${query.title}" has been responded to`,
+      related_id: query._id
+    });
+    await notification.save();
+
+    res.json(query);
+  } catch (err) {
+    console.error('Respond to query error:', err);
+    res.status(500).json({ error: 'Failed to respond to query' });
+  }
+});
+
+// ----------------------------------------------------- Notification Endpoints -----------------------------------------------------------------
+
+// Create notification (internal use by other endpoints)
+app.post('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const { user_id, type, content, related_id } = req.body;
+
+    // Validate required fields
+    if (!user_id || !type || !content) {
+      return res.status(400).json({ error: 'user_id, type, and content are required' });
+    }
+
+    // Validate type
+    const validTypes = ['like', 'comment', 'announcement', 'od_status', 'event_reminder', 'message', 'query_response'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid notification type' });
+    }
+
+    const notification = new Notification({
+      user_id,
+      type,
+      content,
+      related_id: related_id || null,
+      read: false
+    });
+
+    await notification.save();
+
+    res.status(201).json({
+      message: 'Notification created successfully',
+      notification
+    });
+  } catch (err) {
+    console.error('Create notification error:', err);
+    res.status(500).json({ error: 'Failed to create notification' });
+  }
+});
+
+// Get user's notifications
+app.get('/api/notifications/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Users can only view their own notifications (unless admin)
+    const user = await User.findById(req.userId);
+    if (user.role !== 'admin' && req.userId !== userId) {
+      return res.status(403).json({ error: 'You can only view your own notifications' });
+    }
+
+    const notifications = await Notification.find({ user_id: userId })
+      .sort({ createdAt: -1 })
+      .limit(50); // Limit to 50 most recent notifications
+
+    res.json(notifications);
+  } catch (err) {
+    console.error('Fetch notifications error:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+
+    const notification = await Notification.findById(notificationId);
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    // Users can only mark their own notifications as read
+    if (notification.user_id.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only mark your own notifications as read' });
+    }
+
+    notification.read = true;
+    await notification.save();
+
+    res.json({
+      message: 'Notification marked as read',
+      notification
+    });
+  } catch (err) {
+    console.error('Mark notification as read error:', err);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// Mark all notifications as read for a user
+app.put('/api/notifications/user/:userId/read-all', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Users can only mark their own notifications as read
+    if (req.userId !== userId) {
+      return res.status(403).json({ error: 'You can only mark your own notifications as read' });
+    }
+
+    await Notification.updateMany(
+      { user_id: userId, read: false },
+      { $set: { read: true } }
+    );
+
+    res.json({
+      message: 'All notifications marked as read'
+    });
+  } catch (err) {
+    console.error('Mark all notifications as read error:', err);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
+  }
+});
+
+// Get unread notification count
+app.get('/api/notifications/:userId/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Users can only view their own notification count
+    if (req.userId !== userId) {
+      return res.status(403).json({ error: 'You can only view your own notification count' });
+    }
+
+    const count = await Notification.countDocuments({ user_id: userId, read: false });
+
+    res.json({ count });
+  } catch (err) {
+    console.error('Get unread count error:', err);
+    res.status(500).json({ error: 'Failed to get unread count' });
+  }
+});
+
+// ----------------------------------------------------- Semester Subjects Management -----------------------------------------------------------------
+
+// Create semester subject (teachers only)
+app.post('/api/semester-subjects', authenticateToken, async (req, res) => {
+  try {
+    const { batch_year, department, semester, subject_name, subject_code, credits } = req.body;
+    
+    // Verify user is a teacher
+    const user = await User.findById(req.userId);
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can create subjects' });
+    }
+    
+    // Validate required fields
+    if (!batch_year || !department || !semester || !subject_name || !subject_code || !credits) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Check if subject already exists
+    const existingSubject = await SemesterSubject.findOne({ 
+      batch_year, department, semester, subject_code 
+    });
+    
+    if (existingSubject) {
+      return res.status(400).json({ error: 'Subject with this code already exists for this semester' });
+    }
+    
+    const subject = new SemesterSubject({
+      batch_year,
+      department,
+      semester,
+      subject_name,
+      subject_code,
+      credits,
+      created_by: req.userId
+    });
+    
+    await subject.save();
+    
+    res.status(201).json({
+      message: 'Subject created successfully',
+      subject
+    });
+  } catch (err) {
+    console.error('Create subject error:', err);
+    res.status(500).json({ error: 'Failed to create subject' });
+  }
+});
+
+// Get semester subjects by filters
+app.get('/api/semester-subjects', authenticateToken, async (req, res) => {
+  try {
+    const { batch_year, department, semester } = req.query;
+    
+    const query = {};
+    if (batch_year) query.batch_year = parseInt(batch_year);
+    if (department) query.department = department;
+    if (semester) query.semester = parseInt(semester);
+    
+    const subjects = await SemesterSubject.find(query)
+      .populate('created_by', 'name email')
+      .sort({ subject_code: 1 });
+    
+    res.json(subjects);
+  } catch (err) {
+    console.error('Fetch subjects error:', err);
+    res.status(500).json({ error: 'Failed to fetch subjects' });
+  }
+});
+
+// Update semester subject (teachers only)
+app.put('/api/semester-subjects/:id', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can update subjects' });
+    }
+    
+    const { subject_name, subject_code, credits } = req.body;
+    
+    const subject = await SemesterSubject.findByIdAndUpdate(
+      req.params.id,
+      { subject_name, subject_code, credits, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    
+    res.json({ message: 'Subject updated successfully', subject });
+  } catch (err) {
+    console.error('Update subject error:', err);
+    res.status(500).json({ error: 'Failed to update subject' });
+  }
+});
+
+// Delete semester subject (teachers only)
+app.delete('/api/semester-subjects/:id', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can delete subjects' });
+    }
+    
+    const subject = await SemesterSubject.findByIdAndDelete(req.params.id);
+    
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    
+    res.json({ message: 'Subject deleted successfully' });
+  } catch (err) {
+    console.error('Delete subject error:', err);
+    res.status(500).json({ error: 'Failed to delete subject' });
+  }
+});
+
+// ----------------------------------------------------- Exam Timetable Management -----------------------------------------------------------------
+
+// Create/Update exam timetable (teachers only)
+app.post('/api/exam-timetables', authenticateToken, async (req, res) => {
+  try {
+    const { batch_year, department, semester, exams } = req.body;
+    
+    // Verify user is a teacher
+    const user = await User.findById(req.userId);
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can create exam timetables' });
+    }
+    
+    // Validate required fields
+    if (!batch_year || !department || !semester || !exams || !Array.isArray(exams)) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Check if exam timetable already exists
+    const existingTimetable = await ExamTimetable.findOne({ batch_year, department, semester });
+    
+    if (existingTimetable) {
+      // Update existing timetable
+      existingTimetable.exams = exams;
+      existingTimetable.uploaded_by = req.userId;
+      existingTimetable.updatedAt = new Date();
+      await existingTimetable.save();
+      
+      const populated = await ExamTimetable.findById(existingTimetable._id)
+        .populate('exams.subject_id')
+        .populate('uploaded_by', 'name email');
+      
+      return res.json({
+        message: 'Exam timetable updated successfully',
+        timetable: populated
+      });
+    }
+    
+    // Create new exam timetable
+    const timetable = new ExamTimetable({
+      batch_year,
+      department,
+      semester,
+      exams,
+      uploaded_by: req.userId
+    });
+    
+    await timetable.save();
+    
+    const populated = await ExamTimetable.findById(timetable._id)
+      .populate('exams.subject_id')
+      .populate('uploaded_by', 'name email');
+    
+    res.status(201).json({
+      message: 'Exam timetable created successfully',
+      timetable: populated
+    });
+  } catch (err) {
+    console.error('Exam timetable creation error:', err);
+    res.status(500).json({ error: 'Failed to create exam timetable' });
+  }
+});
+
+// Get exam timetable by filters
+app.get('/api/exam-timetables', authenticateToken, async (req, res) => {
+  try {
+    const { batch_year, department, semester } = req.query;
+    
+    const query = {};
+    if (batch_year) query.batch_year = parseInt(batch_year);
+    if (department) query.department = department;
+    if (semester) query.semester = parseInt(semester);
+    
+    const timetables = await ExamTimetable.find(query)
+      .populate('exams.subject_id')
+      .populate('uploaded_by', 'name email')
+      .sort({ updatedAt: -1 });
+    
+    res.json(timetables);
+  } catch (err) {
+    console.error('Fetch exam timetables error:', err);
+    res.status(500).json({ error: 'Failed to fetch exam timetables' });
+  }
+});
+
+// Delete exam timetable (teachers only)
+app.delete('/api/exam-timetables/:id', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'teacher') {
+      return res.status(403).json({ error: 'Only teachers can delete exam timetables' });
+    }
+    
+    const timetable = await ExamTimetable.findByIdAndDelete(req.params.id);
+    
+    if (!timetable) {
+      return res.status(404).json({ error: 'Exam timetable not found' });
+    }
+    
+    res.json({ message: 'Exam timetable deleted successfully' });
+  } catch (err) {
+    console.error('Delete exam timetable error:', err);
+    res.status(500).json({ error: 'Failed to delete exam timetable' });
   }
 });
 

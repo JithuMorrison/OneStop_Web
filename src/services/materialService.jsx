@@ -23,7 +23,7 @@ const uploadFileToSupabase = async (file) => {
     const filePath = `materials/${fileName}`;
 
     const { data, error } = await supabase.storage
-      .from('materials')
+      .from('jithu')
       .upload(filePath, file);
 
     if (error) {
@@ -32,7 +32,7 @@ const uploadFileToSupabase = async (file) => {
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('materials')
+      .from('jithu')
       .getPublicUrl(filePath);
 
     return publicUrl;

@@ -28,7 +28,7 @@ export const announcementService = {
       if (imageFile && imageFile instanceof File) {
         const fileExt = imageFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${fileName}`;
+        const filePath = `announcements/${fileName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('jithu')

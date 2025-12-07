@@ -35,11 +35,11 @@ export const clubService = {
       // Generate unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const filePath = `clubs/${fileName}`;
 
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
-        .from('club-logos')
+        .from('jithu')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -51,7 +51,7 @@ export const clubService = {
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('club-logos')
+        .from('jithu')
         .getPublicUrl(filePath);
 
       return publicUrl;

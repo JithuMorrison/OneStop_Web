@@ -78,9 +78,21 @@ const Sidebar = ({ isCollapsed: controlledCollapsed, onToggle }) => {
         roles: ['student', 'teacher']
       },
       {
+        path: '/events',
+        icon: FaCalendarAlt,
+        label: 'Events',
+        roles: ['student', 'teacher']
+      },
+      {
         path: '/posts',
         icon: FaNewspaper,
         label: 'Posts',
+        roles: ['student', 'teacher']
+      },
+      {
+        path: '/group-chat',
+        icon: FaUsers,
+        label: 'Group Chat',
         roles: ['student', 'teacher']
       },
       {
@@ -138,12 +150,6 @@ const Sidebar = ({ isCollapsed: controlledCollapsed, onToggle }) => {
         roles: ['teacher']
       },
       {
-        path: '/exam-schedules',
-        icon: FaCalendarAlt,
-        label: 'Exam Schedules',
-        roles: ['teacher']
-      },
-      {
         path: '/portals-tools',
         icon: FaTools,
         label: 'Portals & Tools',
@@ -159,9 +165,15 @@ const Sidebar = ({ isCollapsed: controlledCollapsed, onToggle }) => {
 
     const adminLinks = [
       {
-        path: '/admin/clubs',
+        path: '/clubs',
         icon: FaUsers,
         label: 'Manage Clubs',
+        roles: ['admin']
+      },
+      {
+        path: '/events',
+        icon: FaCalendarAlt,
+        label: 'Events',
         roles: ['admin']
       },
       {

@@ -17,7 +17,7 @@ import * as userService from '../../services/userService.jsx';
  * @param {boolean} props.isOpen - Whether the panel is open
  * @param {Function} props.onToggle - Callback to toggle panel visibility
  * @param {string} props.userId - Current user ID
- * @param {string} props.targetUserId - Optional user ID to start chat with automatically
+ * @param {string} props.targetUserId - Optional user ID to start chat with automatically (for other users' profiles)
  */
 const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   const { user } = useAuth();
@@ -30,6 +30,7 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   const [loading, setLoading] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
   const messagesEndRef = useRef(null);
   const pollCleanupRef = useRef(null);
   const threadPollCleanupRef = useRef(null);
@@ -42,6 +43,13 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   }, [messages]);
 
   /**
+   * Determine if viewing own profile or another user's profile
+   */
+  useEffect(() => {
+    setIsOwnProfile(!targetUserId || targetUserId === user?.id);
+  }, [targetUserId, user]);
+
+  /**
    * Load chat threads and contacts on mount
    * Set up polling for real-time updates
    */
@@ -49,30 +57,46 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
     if (isOpen && user) {
       loadChatThreads();
       
-      // Start polling for chat thread updates
-      threadPollCleanupRef.current = chatService.pollChatThreads((updatedChats) => {
-        // Transform threads to include other user info
-        const transformedThreads = updatedChats.map(thread => {
-          const otherUser = thread.participants.find(p => p._id !== user.id);
-          const lastMessage = thread.messages.length > 0 
-            ? thread.messages[thread.messages.length - 1] 
-            : null;
-          
-          return {
-            ...thread,
-            otherUser: otherUser ? {
-              id: otherUser._id,
-              name: otherUser.username,
-              email: otherUser.email
-            } : null,
-            lastMessage: lastMessage?.content || null,
-            lastMessageTime: lastMessage?.timestamp || thread.updatedAt,
-            unreadCount: 0
-          };
-        });
+      // Start polling for chat thread updates only if on own profile
+      // Delay the first poll to avoid duplicate loading
+      if (isOwnProfile) {
+        const pollInterval = setInterval(async () => {
+          try {
+            const updatedChats = await chatService.getChatThreads();
+            
+            // Transform threads to include other user info
+            const transformedThreads = updatedChats.map(thread => {
+              // Find the other user (not the current user)
+              const otherUser = thread.participants.find(p => {
+                const participantId = p._id || p;
+                return participantId !== user.id && participantId !== user._id;
+              });
+              
+              const lastMessage = thread.messages.length > 0 
+                ? thread.messages[thread.messages.length - 1] 
+                : null;
+              
+              return {
+                ...thread,
+                otherUser: otherUser ? {
+                  id: otherUser._id || otherUser,
+                  name: otherUser.username || otherUser.name || 'Unknown User',
+                  email: otherUser.email || ''
+                } : null,
+                lastMessage: lastMessage?.content || null,
+                lastMessageTime: lastMessage?.timestamp || thread.updatedAt,
+                unreadCount: 0
+              };
+            });
+            
+            setChatThreads(transformedThreads);
+          } catch (error) {
+            console.error('Error polling chat threads:', error);
+          }
+        }, 5000);
         
-        setChatThreads(transformedThreads);
-      }, 5000);
+        threadPollCleanupRef.current = () => clearInterval(pollInterval);
+      }
     }
     
     // Cleanup polling on unmount or when panel closes
@@ -81,7 +105,7 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
         threadPollCleanupRef.current();
       }
     };
-  }, [isOpen, user]);
+  }, [isOpen, user, isOwnProfile]);
 
   /**
    * Update contacts when chat threads change
@@ -93,24 +117,28 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   }, [chatThreads]);
 
   /**
-   * Auto-start chat with targetUserId if provided
+   * Auto-start chat with targetUserId if provided (when viewing another user's profile)
    */
   useEffect(() => {
-    if (isOpen && targetUserId && chatThreads.length > 0) {
-      // Check if thread already exists with target user
-      const existingThread = chatThreads.find(thread =>
-        thread.participants.includes(targetUserId)
-      );
+    if (isOpen && targetUserId && !isOwnProfile) {
+      // When viewing another user's profile, automatically open chat with them
+      if (chatThreads.length > 0) {
+        const existingThread = chatThreads.find(thread =>
+          thread.participants.some(p => p._id === targetUserId || p === targetUserId)
+        );
 
-      if (existingThread) {
-        setSelectedThread(existingThread);
+        if (existingThread) {
+          setSelectedThread(existingThread);
+        } else {
+          // Create a new thread with the target user
+          fetchAndStartChat(targetUserId);
+        }
       } else {
-        // Create a new thread with the target user
-        // We'll need to fetch the target user's info first
+        // If no threads loaded yet, create new chat
         fetchAndStartChat(targetUserId);
       }
     }
-  }, [isOpen, targetUserId, chatThreads]);
+  }, [isOpen, targetUserId, chatThreads, isOwnProfile]);
 
   /**
    * Fetch target user info and start chat
@@ -118,18 +146,18 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
    */
   const fetchAndStartChat = async (targetId) => {
     try {
-      // TODO: Implement user service call to get user info
-      // const targetUser = await userService.getUserById(targetId);
+      // Fetch the actual user info from backend
+      const targetUser = await userService.getUserById(targetId);
       
-      // Mock target user for now
-      const targetUser = {
-        id: targetId,
-        name: 'Profile User',
-        email: 'user@ssn.edu.in',
-        role: 'student'
+      // Transform to expected format
+      const userForChat = {
+        id: targetUser._id,
+        name: targetUser.name || targetUser.username,
+        email: targetUser.email,
+        role: targetUser.role
       };
       
-      startChat(targetUser);
+      startChat(userForChat);
     } catch (error) {
       console.error('Error fetching target user:', error);
     }
@@ -143,14 +171,38 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
     if (selectedThread) {
       loadMessages(selectedThread._id);
       
-      // Start polling for new messages
-      pollCleanupRef.current = chatService.pollMessages(
-        selectedThread._id,
-        (updatedMessages) => {
-          setMessages(updatedMessages);
-        },
-        3000
-      );
+      // Start polling for new messages - delay first poll to avoid duplicate
+      const pollInterval = setInterval(async () => {
+        try {
+          const chat = await chatService.getChatMessages(selectedThread._id);
+          
+          // Transform messages to match component format
+          const transformedMessages = chat.messages.map(msg => {
+            // Extract sender ID - handle both populated and non-populated sender
+            let senderId;
+            if (typeof msg.sender === 'object' && msg.sender !== null) {
+              senderId = msg.sender._id || msg.sender.id;
+            } else {
+              senderId = msg.sender;
+            }
+            
+            return {
+              id: msg._id,
+              senderId: senderId,
+              senderName: msg.sender?.username || msg.sender?.name || 'Unknown',
+              content: msg.content,
+              createdAt: msg.timestamp,
+              read: true
+            };
+          });
+          
+          setMessages(transformedMessages);
+        } catch (error) {
+          console.error('Error polling messages:', error);
+        }
+      }, 3000);
+      
+      pollCleanupRef.current = () => clearInterval(pollInterval);
     }
     
     // Cleanup polling when thread changes or component unmounts
@@ -171,7 +223,12 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
       
       // Transform threads to include other user info
       const transformedThreads = threads.map(thread => {
-        const otherUser = thread.participants.find(p => p._id !== user.id);
+        // Find the other user (not the current user)
+        const otherUser = thread.participants.find(p => {
+          const participantId = p._id || p;
+          return participantId !== user.id && participantId !== user._id;
+        });
+        
         const lastMessage = thread.messages.length > 0 
           ? thread.messages[thread.messages.length - 1] 
           : null;
@@ -179,13 +236,13 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
         return {
           ...thread,
           otherUser: otherUser ? {
-            id: otherUser._id,
-            name: otherUser.username,
-            email: otherUser.email
+            id: otherUser._id || otherUser,
+            name: otherUser.username || otherUser.name || 'Unknown User',
+            email: otherUser.email || ''
           } : null,
           lastMessage: lastMessage?.content || null,
           lastMessageTime: lastMessage?.timestamp || thread.updatedAt,
-          unreadCount: 0 // TODO: Implement unread count logic
+          unreadCount: 0
         };
       });
       
@@ -235,14 +292,24 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
       const chat = await chatService.getChatMessages(threadId);
       
       // Transform messages to match component format
-      const transformedMessages = chat.messages.map(msg => ({
-        id: msg._id,
-        senderId: msg.sender._id || msg.sender,
-        senderName: msg.sender.username || 'Unknown',
-        content: msg.content,
-        createdAt: msg.timestamp,
-        read: true // TODO: Implement read status
-      }));
+      const transformedMessages = chat.messages.map(msg => {
+        // Extract sender ID - handle both populated and non-populated sender
+        let senderId;
+        if (typeof msg.sender === 'object' && msg.sender !== null) {
+          senderId = msg.sender._id || msg.sender.id;
+        } else {
+          senderId = msg.sender;
+        }
+        
+        return {
+          id: msg._id,
+          senderId: senderId,
+          senderName: msg.sender?.username || msg.sender?.name || 'Unknown',
+          content: msg.content,
+          createdAt: msg.timestamp,
+          read: true
+        };
+      });
       
       setMessages(transformedMessages);
     } catch (error) {
@@ -383,19 +450,61 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
    * @returns {string} - Formatted time string
    */
   const formatTime = (date) => {
+    if (!date) return '';
+    
     const now = new Date();
     const messageDate = new Date(date);
+    
+    // Check if date is valid
+    if (isNaN(messageDate.getTime())) return '';
+    
     const diffMs = now - messageDate;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    // If message is from today, show time
+    const isToday = messageDate.toDateString() === now.toDateString();
+    if (isToday) {
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      // Show actual time for today's messages
+      return messageDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    }
     
-    return messageDate.toLocaleDateString();
+    // If message is from yesterday
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (messageDate.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday ' + messageDate.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+      });
+    }
+    
+    // If within last week, show day name
+    if (diffDays < 7) {
+      return messageDate.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    }
+    
+    // Otherwise show date
+    return messageDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   if (!isOpen) {
@@ -425,22 +534,28 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
           {/* Chat Header */}
           <div className="flex items-center p-3 border-b border-gray-200 bg-gray-50">
             <button
-              onClick={() => setSelectedThread(null)}
+              onClick={() => {
+                setSelectedThread(null);
+                // If not own profile, close the panel entirely
+                if (!isOwnProfile) {
+                  onToggle();
+                }
+              }}
               className="p-2 mr-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
-              aria-label="Back to threads"
+              aria-label={isOwnProfile ? "Back to threads" : "Close chat"}
             >
               <FaChevronLeft />
             </button>
             <div className="flex items-center flex-1">
               <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold mr-3">
-                {selectedThread.otherUser?.name?.charAt(0) || 'U'}
+                {selectedThread.otherUser?.name?.charAt(0)?.toUpperCase() || 'U'}
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">
                   {selectedThread.otherUser?.name || 'Unknown User'}
                 </h3>
                 <p className="text-xs text-gray-500">
-                  {selectedThread.otherUser?.email}
+                  {selectedThread.otherUser?.email || ''}
                 </p>
               </div>
             </div>
@@ -462,7 +577,8 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
             ) : (
               <>
                 {messages.map((message) => {
-                  const isSent = message.senderId === user.id;
+                  // Check if message is sent by current user
+                  const isSent = message.senderId === user._id;
                   return (
                     <div
                       key={message.id}
@@ -475,7 +591,7 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
                             : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-sm break-words">{message.content}</p>
                         <p
                           className={`text-xs mt-1 ${
                             isSent ? 'text-blue-100' : 'text-gray-500'
@@ -514,59 +630,62 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
           </form>
         </div>
       ) : (
-        // Thread List View
+        // Thread List View (only show on own profile)
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Search Bar */}
-          <div className="p-3 border-b border-gray-200">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                onFocus={() => setShowSearch(true)}
-                placeholder="Search by email..."
-                className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          {/* Search Bar - only show on own profile */}
+          {isOwnProfile && (
+            <div className="p-3 border-b border-gray-200">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onFocus={() => setShowSearch(true)}
+                  placeholder="Search by email..."
+                  className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              </div>
+
+              {/* Search Results */}
+              {showSearch && searchResults.length > 0 && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {searchResults.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => startChat(result)}
+                      className="w-full flex items-center p-3 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 font-semibold mr-3">
+                        {result.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-800">{result.name}</p>
+                        <p className="text-xs text-gray-500">{result.email}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Search Results */}
-            {showSearch && searchResults.length > 0 && (
-              <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {searchResults.map((result) => (
-                  <button
-                    key={result.id}
-                    onClick={() => startChat(result)}
-                    className="w-full flex items-center p-3 hover:bg-gray-50 transition-colors text-left"
-                  >
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 font-semibold mr-3">
-                      {result.name.charAt(0)}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800">{result.name}</p>
-                      <p className="text-xs text-gray-500">{result.email}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Chat Threads */}
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex justify-center items-center h-full">
-                <div className="text-gray-500">Loading chats...</div>
-              </div>
-            ) : chatThreads.length === 0 ? (
-              <div className="flex flex-col justify-center items-center h-full p-6 text-center">
-                <FaUser className="text-4xl text-gray-300 mb-3" />
-                <p className="text-gray-500 mb-2">No conversations yet</p>
-                <p className="text-sm text-gray-400">
-                  Search for users by email to start chatting
-                </p>
-              </div>
-            ) : (
+          {/* Chat Threads - only show on own profile */}
+          {isOwnProfile && (
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center items-center h-full">
+                  <div className="text-gray-500">Loading chats...</div>
+                </div>
+              ) : chatThreads.length === 0 ? (
+                <div className="flex flex-col justify-center items-center h-full p-6 text-center">
+                  <FaUser className="text-4xl text-gray-300 mb-3" />
+                  <p className="text-gray-500 mb-2">No conversations yet</p>
+                  <p className="text-sm text-gray-400">
+                    Search for users by email to start chatting
+                  </p>
+                </div>
+              ) : (
               <div className="divide-y divide-gray-200">
                 {chatThreads.map((thread) => (
                   <button
@@ -601,12 +720,13 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
                     </div>
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Contacts Section */}
-          {contacts.length > 0 && (
+          {/* Contacts Section - only show on own profile */}
+          {isOwnProfile && contacts.length > 0 && (
             <div className="border-t border-gray-200">
               <div className="p-3 bg-gray-50">
                 <h3 className="text-xs font-semibold text-gray-600 uppercase">

@@ -29,6 +29,13 @@ const Navbar = () => {
   };
 
   /**
+   * Handle search input change and navigate on type
+   */
+  const handleSearchChange = (value) => {
+    setSearchQuery(value);
+  };
+
+  /**
    * Handle logout
    */
   const handleLogout = async () => {

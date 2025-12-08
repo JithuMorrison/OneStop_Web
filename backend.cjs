@@ -89,9 +89,10 @@ const ClubSchema = new mongoose.Schema({
   logo: { type: String, required: true }, // Supabase Storage URL
   description: { type: String, required: true },
   subdomains: { type: Array, default: [] },
-  members: { type: Array, default: [] }, // Array of { userId, role }
-  moderators: { type: Array, default: [] }, // Array of { userId, type: 'teacher' | 'student' }
+  members: { type: Array, default: [] }, // Array of { userId, name, role, subdomain }
+  moderators: { type: Array, default: [] }, // Array of { userId, name, type: 'teacher' | 'student' }
   works_done: { type: Array, default: [] },
+  links: { type: Array, default: [] }, // Array of { name, url }
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -104,15 +105,18 @@ const AnnouncementSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
   category: { type: String, required: true },
-  image: { type: String, required: true }, // Supabase Storage URL
+  image: { type: String, required: true }, // Supabase Storage URL or external URL
   additional_images: { type: Array, default: [] }, // Array of URLs
   hashtag: { type: String, required: true }, // #type_eventName_startDate_endDate
+  start_date: { type: Date, required: true },
+  end_date: { type: Date, required: true },
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   likes: { type: Number, default: 0 },
   liked_by: { type: Array, default: [] }, // user IDs
   comments: { type: Array, default: [] }, // Array of { id, content, userId, userName, createdAt }
   registration_enabled: { type: Boolean, default: false },
   registration_fields: { type: Array, default: [] },
+  registration_role_restriction: { type: String, enum: ['all', 'students', 'teachers'], default: 'all' }, // Who can register
   registrations: { type: Array, default: [] }, // Array of registration IDs
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -160,6 +164,8 @@ const ODClaimSchema = new mongoose.Schema({
   event_name: { type: String, required: true },
   teacher_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   description: { type: String, required: true },
+  dates: { type: Array, default: [] }, // Array of date strings
+  proof_url: { type: String }, // Supabase Storage URL for proof document
   status: { type: String, default: 'pending', enum: ['pending', 'accepted', 'rejected'] },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -262,6 +268,29 @@ const ChatSchema = new mongoose.Schema({
 });
 
 const Chat = mongoose.model('Chat', ChatSchema);
+
+// Group Chat Schema
+const GroupChatSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: { type: String },
+  type: { type: String, enum: ['world', 'custom', 'club'], required: true },
+  club_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Club' },
+  created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  createdAt: { type: Date, default: Date.now }
+});
+
+const GroupChat = mongoose.model('GroupChat', GroupChatSchema);
+
+// Group Message Schema
+const GroupMessageSchema = new mongoose.Schema({
+  group_id: { type: mongoose.Schema.Types.ObjectId, ref: 'GroupChat', required: true },
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const GroupMessage = mongoose.model('GroupMessage', GroupMessageSchema);
 
 const Schema = new mongoose.Schema({
   sem: String,
@@ -417,10 +446,22 @@ const authMiddleware = async (req, res, next) => {
 };
 
 const adminMiddleware = (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Access denied' });
   }
   next();
+};
+
+const adminOnlyMiddleware = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+  } catch (err) {
+    res.status(500).json({ error: 'Authorization check failed' });
+  }
 };
 
 // Admin routes
@@ -761,6 +802,7 @@ app.post('/api/register', async (req, res) => {
     res.status(201).json({ 
       token, 
       user: { 
+        _id: user._id,
         id: user._id, 
         username, 
         name,
@@ -778,6 +820,8 @@ app.post('/api/register', async (req, res) => {
         streak: user.streak,
         badges: user.badges,
         achievements: user.achievements,
+        followers: user.followers,
+        following: user.following
       } 
     });
   } catch (err) {
@@ -823,6 +867,7 @@ app.post('/api/login', async (req, res) => {
     res.json({ 
       token, 
       user: { 
+        _id: user._id,
         id: user._id, 
         username: user.username, 
         name: user.name,
@@ -841,6 +886,8 @@ app.post('/api/login', async (req, res) => {
         badges: user.badges,
         achievements: user.achievements,
         last_login: user.last_login,
+        followers: user.followers,
+        following: user.following
       } 
     });
   } catch (err) {
@@ -936,13 +983,14 @@ app.post('/api/follow/:userId', authenticateToken, async (req, res) => {
       $push: { following: targetUserId }
     });
 
-    // Increment target user's followers count
+    // Add to target user's followers array
     await User.findByIdAndUpdate(targetUserId, {
-      $inc: { followers: 1 }
+      $push: { followers: currentUserId }
     });
 
     res.json({ message: 'Followed successfully' });
   } catch (err) {
+    console.error('Follow error:', err);
     res.status(500).json({ error: 'Failed to follow user' });
   }
 });
@@ -968,13 +1016,14 @@ app.post('/api/unfollow/:userId', authenticateToken, async (req, res) => {
       $pull: { following: targetUserId }
     });
 
-    // Decrement target user's followers count
+    // Remove from target user's followers array
     await User.findByIdAndUpdate(targetUserId, {
-      $inc: { followers: -1 }
+      $pull: { followers: currentUserId }
     });
 
     res.json({ message: 'Unfollowed successfully' });
   } catch (err) {
+    console.error('Unfollow error:', err);
     res.status(500).json({ error: 'Failed to unfollow user' });
   }
 });
@@ -1197,19 +1246,6 @@ app.post('/api/reset-password', async (req, res) => {
 
 // ----------------------------------------------------- Club Management -----------------------------------------------------------------
 
-// Middleware to check if user is admin
-const adminOnlyMiddleware = async (req, res, next) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-  } catch (err) {
-    res.status(500).json({ error: 'Authorization check failed' });
-  }
-};
-
 // Create club (admin only)
 app.post('/api/clubs', authenticateToken, adminOnlyMiddleware, async (req, res) => {
   try {
@@ -1284,7 +1320,7 @@ app.post('/api/clubs', authenticateToken, adminOnlyMiddleware, async (req, res) 
   }
 });
 
-// Update club (moderators only)
+// Update club (moderators and admin)
 app.put('/api/clubs/:id', authenticateToken, async (req, res) => {
   try {
     const clubId = req.params.id;
@@ -1302,13 +1338,20 @@ app.put('/api/clubs/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Club not found' });
     }
 
-    // Check if user is a moderator
+    // Get user to check role
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if user is admin or a moderator
+    const isAdmin = user.role === 'admin';
     const isModerator = club.moderators.some(
       mod => mod.userId.toString() === req.userId
     );
 
-    if (!isModerator) {
-      return res.status(403).json({ error: 'Only club moderators can edit this club' });
+    if (!isAdmin && !isModerator) {
+      return res.status(403).json({ error: 'Only club moderators and admins can edit this club' });
     }
 
     // Update allowed fields
@@ -1328,6 +1371,23 @@ app.put('/api/clubs/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Club update error:', err);
     res.status(500).json({ error: 'Failed to update club' });
+  }
+});
+
+// Delete club (admin only)
+app.delete('/api/clubs/:id', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const clubId = req.params.id;
+    
+    const club = await Club.findByIdAndDelete(clubId);
+    if (!club) {
+      return res.status(404).json({ error: 'Club not found' });
+    }
+
+    res.json({ message: 'Club deleted successfully' });
+  } catch (err) {
+    console.error('Club delete error:', err);
+    res.status(500).json({ error: 'Failed to delete club' });
   }
 });
 
@@ -1396,16 +1456,19 @@ app.post('/api/announcements', authenticateToken, async (req, res) => {
       title,
       description,
       category,
-      image, // Supabase Storage URL
+      image, // Supabase Storage URL or external URL
       additional_images,
       hashtag,
+      start_date,
+      end_date,
       registration_enabled,
-      registration_fields
+      registration_fields,
+      registration_role_restriction
     } = req.body;
 
     // Validate required fields
-    if (!title || !description || !category || !image || !hashtag) {
-      return res.status(400).json({ error: 'Title, description, category, image, and hashtag are required' });
+    if (!title || !description || !category || !image || !hashtag || !start_date || !end_date) {
+      return res.status(400).json({ error: 'Title, description, category, image, hashtag, start_date, and end_date are required' });
     }
 
     // Create announcement
@@ -1416,9 +1479,12 @@ app.post('/api/announcements', authenticateToken, async (req, res) => {
       image,
       additional_images: additional_images || [],
       hashtag,
+      start_date: new Date(start_date),
+      end_date: new Date(end_date),
       created_by: req.userId,
       registration_enabled: registration_enabled || false,
       registration_fields: registration_fields || [],
+      registration_role_restriction: registration_role_restriction || 'all',
       registrations: []
     });
 
@@ -1430,37 +1496,32 @@ app.post('/api/announcements', authenticateToken, async (req, res) => {
       { $push: { announcements: announcement._id } }
     );
 
-    // Parse hashtag and create event
-    try {
-      // Extract event info from hashtag format: #type_eventName_startDate_endDate
-      const hashtagParts = hashtag.replace('#', '').split('_');
-      if (hashtagParts.length === 4) {
-        const [type, eventName, startDateStr, endDateStr] = hashtagParts;
-        
-        // Parse dates (dd-mm-yyyy format)
-        const parseDate = (dateStr) => {
-          const [day, month, year] = dateStr.split('-').map(Number);
-          return new Date(year, month - 1, day);
-        };
+    // Check if event with same hashtag already exists
+    const existingEvent = await Event.findOne({
+      source_type: 'announcement',
+      name: title,
+      type: category,
+      start_date: new Date(start_date),
+      end_date: new Date(end_date)
+    });
 
-        const startDate = parseDate(startDateStr);
-        const endDate = parseDate(endDateStr);
-
-        // Create event
+    // Create event only if it doesn't exist
+    if (!existingEvent) {
+      try {
         const event = new Event({
-          name: eventName,
-          type: type,
-          start_date: startDate,
-          end_date: endDate,
+          name: title,
+          type: category,
+          start_date: new Date(start_date),
+          end_date: new Date(end_date),
           source_type: 'announcement',
           source_id: announcement._id
         });
 
         await event.save();
+      } catch (eventErr) {
+        console.error('Event creation error:', eventErr);
+        // Don't fail the announcement creation if event creation fails
       }
-    } catch (eventErr) {
-      console.error('Event creation error:', eventErr);
-      // Don't fail the announcement creation if event creation fails
     }
 
     // Create notifications for all users (announcement broadcast)
@@ -1525,18 +1586,18 @@ app.get('/api/announcements/user/:userId', authenticateToken, async (req, res) =
   }
 });
 
-// Get followed announcements (for student dashboard)
-app.get('/api/announcements/followed', authenticateToken, async (req, res) => {
+// Get liked announcements (for student dashboard)
+app.get('/api/announcements/liked', authenticateToken, async (req, res) => {
   try {
-    // Get current user's following list
+    // Get current user
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get announcements from followed users
+    // Get announcements that user has liked
     const announcements = await Announcement.find({ 
-      created_by: { $in: user.following } 
+      liked_by: req.userId
     })
       .populate('created_by', 'name email role')
       .sort({ createdAt: -1 })
@@ -1544,8 +1605,8 @@ app.get('/api/announcements/followed', authenticateToken, async (req, res) => {
 
     res.json(announcements);
   } catch (err) {
-    console.error('Fetch followed announcements error:', err);
-    res.status(500).json({ error: 'Failed to fetch followed announcements' });
+    console.error('Fetch liked announcements error:', err);
+    res.status(500).json({ error: 'Failed to fetch liked announcements' });
   }
 });
 
@@ -1567,6 +1628,23 @@ app.post('/api/announcements/:id/register', authenticateToken, async (req, res) 
       return res.status(400).json({ error: 'Registration is not enabled for this announcement' });
     }
 
+    // Get user info
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check role restrictions
+    const roleRestriction = announcement.registration_role_restriction || 'all';
+    if (roleRestriction !== 'all') {
+      if (roleRestriction === 'students' && user.role !== 'student') {
+        return res.status(403).json({ error: 'Only students can register for this event' });
+      }
+      if (roleRestriction === 'teachers' && user.role !== 'teacher') {
+        return res.status(403).json({ error: 'Only teachers can register for this event' });
+      }
+    }
+
     // Check if user already registered
     const existingRegistration = await Registration.findOne({
       announcement_id: announcementId,
@@ -1577,20 +1655,37 @@ app.post('/api/announcements/:id/register', authenticateToken, async (req, res) 
       return res.status(400).json({ error: 'You have already registered for this announcement' });
     }
 
+    // Auto-populate user data (name, email, role) and merge with custom fields
+    const completeRegistrationData = {
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      ...registrationData // Custom fields from the form
+    };
+
     // Create registration
     const registration = new Registration({
       announcement_id: announcementId,
       user_id: userId,
-      data: registrationData,
+      data: completeRegistrationData,
       badge_issued: false
     });
 
     await registration.save();
 
-    // Add registration ID to announcement
+    // Add registration info to announcement (with user details)
     await Announcement.findByIdAndUpdate(
       announcementId,
-      { $push: { registrations: registration._id } }
+      { $push: { 
+        registrations: {
+          _id: registration._id,
+          user_id: userId,
+          user_name: user.name,
+          user_email: user.email,
+          data: completeRegistrationData,
+          createdAt: registration.createdAt
+        }
+      }}
     );
 
     // Add announcement ID to user's registered_events
@@ -1801,27 +1896,18 @@ app.get('/api/posts/user/:userId', authenticateToken, async (req, res) => {
 });
 
 // Get followed posts (for student dashboard)
-app.get('/api/posts/followed', authenticateToken, async (req, res) => {
+// Get liked posts (for student dashboard)
+app.get('/api/posts/liked', authenticateToken, async (req, res) => {
   try {
-    // Get current user's following list
+    // Get current user
     const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get posts from followed users with visibility check
-    let visibilityFilter;
-    if (user.role === 'student') {
-      visibilityFilter = { visibility: { $in: ['students', 'everyone'] } };
-    } else if (user.role === 'teacher') {
-      visibilityFilter = { visibility: { $in: ['teachers', 'everyone'] } };
-    } else {
-      visibilityFilter = {};
-    }
-
+    // Get posts that user has liked
     const posts = await Post.find({ 
-      created_by: { $in: user.following },
-      ...visibilityFilter
+      liked_by: req.userId
     })
       .populate('created_by', 'name email role username')
       .sort({ createdAt: -1 })
@@ -1829,7 +1915,7 @@ app.get('/api/posts/followed', authenticateToken, async (req, res) => {
 
     res.json(posts);
   } catch (err) {
-    console.error('Fetch followed posts error:', err);
+    console.error('Fetch liked posts error:', err);
     res.status(500).json({ error: 'Failed to fetch followed posts' });
   }
 });
@@ -2218,12 +2304,19 @@ app.post('/api/od-claims', authenticateToken, async (req, res) => {
       event_id,
       event_name,
       teacher_id,
-      description
+      description,
+      dates,
+      proof_url
     } = req.body;
 
     // Validate required fields
     if (!event_name || !teacher_id || !description) {
       return res.status(400).json({ error: 'Event name, teacher ID, and description are required' });
+    }
+
+    // Validate dates
+    if (!dates || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'At least one date is required' });
     }
 
     // Get current user
@@ -2250,6 +2343,8 @@ app.post('/api/od-claims', authenticateToken, async (req, res) => {
       event_name,
       teacher_id,
       description,
+      dates: dates,
+      proof_url: proof_url || null,
       status: 'pending'
     });
 
@@ -2529,13 +2624,18 @@ app.get('/api/events/date/:date', authenticateToken, async (req, res) => {
   }
 });
 
-// Get upcoming events (for dashboards)
+// Get upcoming events (for dashboards) - events within 1 month from now
 app.get('/api/events/upcoming', authenticateToken, async (req, res) => {
   try {
     const now = new Date();
+    const oneMonthFromNow = new Date();
+    oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
     
     const events = await Event.find({
-      start_date: { $gte: now }
+      start_date: { 
+        $gte: now,
+        $lte: oneMonthFromNow
+      }
     })
     .sort({ start_date: 1 })
     .limit(10);
@@ -2592,7 +2692,7 @@ app.get('/api/exam-schedules', authenticateToken, async (req, res) => {
 // ----------------------------------------------------- Portal and Tool Management -----------------------------------------------------------------
 
 // Create portal (admin only)
-app.post('/api/portals', authenticateToken, adminMiddleware, async (req, res) => {
+app.post('/api/portals', authenticateToken, adminOnlyMiddleware, async (req, res) => {
   try {
     const { title, description, external_link } = req.body;
 
@@ -2605,7 +2705,7 @@ app.post('/api/portals', authenticateToken, adminMiddleware, async (req, res) =>
       title,
       description,
       external_link,
-      created_by: req.user.userId
+      created_by: req.userId
     });
 
     await portal.save();
@@ -2631,7 +2731,7 @@ app.get('/api/portals', authenticateToken, async (req, res) => {
 });
 
 // Create tool (admin only)
-app.post('/api/tools', authenticateToken, adminMiddleware, async (req, res) => {
+app.post('/api/tools', authenticateToken, adminOnlyMiddleware, async (req, res) => {
   try {
     const { title, description, external_link } = req.body;
 
@@ -2644,7 +2744,7 @@ app.post('/api/tools', authenticateToken, adminMiddleware, async (req, res) => {
       title,
       description,
       external_link,
-      created_by: req.user.userId
+      created_by: req.userId
     });
 
     await tool.save();
@@ -2680,16 +2780,22 @@ app.post('/api/queries', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Title and description are required' });
     }
 
+    // Get user to check role
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Only students and teachers can submit queries
-    if (req.user.role === 'admin') {
+    if (user.role === 'admin') {
       return res.status(403).json({ error: 'Admins cannot submit queries' });
     }
 
     const query = new Query({
       title,
       description,
-      submitted_by: req.user.userId,
-      submitter_role: req.user.role,
+      submitted_by: req.userId,
+      submitter_role: user.role,
       status: 'pending'
     });
 
@@ -2720,7 +2826,7 @@ app.get('/api/queries/user/:userId', authenticateToken, async (req, res) => {
     const { userId } = req.params;
 
     // Users can only view their own queries
-    if (req.user.userId !== userId) {
+    if (req.userId !== userId) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
@@ -2735,7 +2841,7 @@ app.get('/api/queries/user/:userId', authenticateToken, async (req, res) => {
 });
 
 // Get all queries (admin only)
-app.get('/api/queries', authenticateToken, adminMiddleware, async (req, res) => {
+app.get('/api/queries', authenticateToken, adminOnlyMiddleware, async (req, res) => {
   try {
     const { status } = req.query;
 
@@ -2756,7 +2862,7 @@ app.get('/api/queries', authenticateToken, adminMiddleware, async (req, res) => 
 });
 
 // Respond to a query (admin only)
-app.put('/api/queries/:id/respond', authenticateToken, adminMiddleware, async (req, res) => {
+app.put('/api/queries/:id/respond', authenticateToken, adminOnlyMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { response } = req.body;
@@ -3148,5 +3254,301 @@ app.delete('/api/exam-timetables/:id', authenticateToken, async (req, res) => {
 
 // ----------------------------------------------------- API Listener -----------------------------------------------------------------
 
+// ============================================ GROUP CHAT ROUTES ============================================
+
+// Get all group chats for current user
+app.get('/api/group-chats', authenticateToken, async (req, res) => {
+  try {
+    // Get groups where user is a member or creator
+    const groups = await GroupChat.find({
+      $or: [
+        { members: req.userId },
+        { created_by: req.userId },
+        { type: 'world' } // Everyone can access World Chat
+      ]
+    }).populate('created_by', 'name email')
+      .populate('club_id', 'name logo')
+      .sort({ createdAt: -1 });
+
+    res.json(groups);
+  } catch (err) {
+    console.error('Get group chats error:', err);
+    res.status(500).json({ error: 'Failed to fetch group chats' });
+  }
+});
+
+// Create new group chat
+app.post('/api/group-chats', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, type, club_id, members } = req.body;
+
+    // Validate required fields
+    if (!name || !type) {
+      return res.status(400).json({ error: 'Name and type are required' });
+    }
+
+    // Validate type
+    if (!['custom', 'club'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid group type. Use "custom" or "club"' });
+    }
+
+    // If club type, validate club_id
+    if (type === 'club' && !club_id) {
+      return res.status(400).json({ error: 'Club ID is required for club groups' });
+    }
+
+    // Create group
+    const groupData = {
+      name,
+      description: description || '',
+      type,
+      created_by: req.userId,
+      members: [req.userId, ...(members || [])] // Add creator and selected members
+    };
+
+    if (type === 'club') {
+      groupData.club_id = club_id;
+    }
+
+    const group = new GroupChat(groupData);
+    await group.save();
+
+    // Populate before sending response
+    await group.populate('created_by', 'name email');
+    if (type === 'club') {
+      await group.populate('club_id', 'name logo');
+    }
+
+    res.status(201).json(group);
+  } catch (err) {
+    console.error('Create group chat error:', err);
+    res.status(500).json({ error: 'Failed to create group chat' });
+  }
+});
+
+// Get messages for a group
+app.get('/api/group-chats/:groupId/messages', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check if user has access (member, creator, or world chat)
+    const hasAccess = group.type === 'world' || 
+                     group.members.includes(req.userId) || 
+                     (group.created_by && group.created_by.toString() === req.userId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get messages
+    const messages = await GroupMessage.find({ group_id: groupId })
+      .populate('sender', 'name email')
+      .sort({ createdAt: 1 })
+      .limit(500); // Limit to last 500 messages
+
+    res.json(messages);
+  } catch (err) {
+    console.error('Get group messages error:', err);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// Send message to group
+app.post('/api/group-chats/:groupId/messages', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check if user has access
+    const hasAccess = group.type === 'world' || 
+                     group.members.includes(req.userId) || 
+                     (group.created_by && group.created_by.toString() === req.userId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Create message
+    const groupMessage = new GroupMessage({
+      group_id: groupId,
+      sender: req.userId,
+      message: message.trim()
+    });
+
+    await groupMessage.save();
+    await groupMessage.populate('sender', 'name email');
+
+    res.status(201).json(groupMessage);
+  } catch (err) {
+    console.error('Send group message error:', err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Get group members
+app.get('/api/group-chats/:groupId/members', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId)
+      .populate('members', 'name email role department')
+      .populate('created_by', 'name email role department');
+    
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Check if user has access
+    const hasAccess = group.type === 'world' || 
+                     group.members.some(m => m._id.toString() === req.userId) || 
+                     (group.created_by && group.created_by._id.toString() === req.userId);
+
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Return all members including creator
+    let allMembers = [...group.members];
+    if (group.created_by && !allMembers.find(m => m._id.toString() === group.created_by._id.toString())) {
+      allMembers.push(group.created_by);
+    }
+
+    res.json(allMembers);
+  } catch (err) {
+    console.error('Get group members error:', err);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+// Add members to group
+app.post('/api/group-chats/:groupId/members', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { members } = req.body;
+
+    if (!members || !Array.isArray(members) || members.length === 0) {
+      return res.status(400).json({ error: 'Members array is required' });
+    }
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Only creator can add members (or make this more flexible)
+    if (group.created_by && group.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only group creator can add members' });
+    }
+
+    // Add new members (avoid duplicates)
+    const newMembers = members.filter(m => !group.members.includes(m));
+    group.members.push(...newMembers);
+    await group.save();
+
+    res.json({ message: 'Members added successfully', group });
+  } catch (err) {
+    console.error('Add members error:', err);
+    res.status(500).json({ error: 'Failed to add members' });
+  }
+});
+
+// Remove member from group
+app.delete('/api/group-chats/:groupId/members/:memberId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId, memberId } = req.params;
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Only creator can remove members
+    if (group.created_by && group.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'Only group creator can remove members' });
+    }
+
+    // Cannot remove creator
+    if (group.created_by && group.created_by.toString() === memberId) {
+      return res.status(400).json({ error: 'Cannot remove group creator' });
+    }
+
+    // Remove member
+    group.members = group.members.filter(m => m.toString() !== memberId);
+    await group.save();
+
+    res.json({ message: 'Member removed successfully' });
+  } catch (err) {
+    console.error('Remove member error:', err);
+    res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// Search users by name or email
+app.get('/api/users/search', authenticateToken, async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.length < 2) {
+      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+    }
+
+    // Search by name or email (case-insensitive)
+    const users = await User.find({
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } }
+      ]
+    })
+    .select('name email role department')
+    .limit(10);
+
+    res.json(users);
+  } catch (err) {
+    console.error('User search error:', err);
+    res.status(500).json({ error: 'Failed to search users' });
+  }
+});
+
+// Initialize World Chat on server start
+const createWorldChat = async () => {
+  try {
+    const existing = await GroupChat.findOne({ type: 'world' });
+    if (!existing) {
+      await GroupChat.create({
+        name: 'World Chat',
+        description: 'Public chat for everyone in the campus',
+        type: 'world',
+        created_by: null,
+        members: []
+      });
+      console.log('World Chat created successfully');
+    }
+  } catch (err) {
+    console.error('Error creating World Chat:', err);
+  }
+};
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`Server running on port ${PORT}`);
+  await createWorldChat();
+});

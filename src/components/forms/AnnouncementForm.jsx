@@ -13,14 +13,18 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
     title: initialData?.title || '',
     description: initialData?.description || '',
     category: initialData?.category || '',
-    hashtag: initialData?.hashtag || '',
+    start_date: initialData?.start_date || '',
+    end_date: initialData?.end_date || '',
     registration_enabled: initialData?.registration_enabled || false,
     registration_fields: initialData?.registration_fields || [],
+    registration_role_restriction: initialData?.registration_role_restriction || 'all',
     additional_images: initialData?.additional_images || []
   });
 
   const [imageFile, setImageFile] = useState(null);
+  const [imageUrl, setImageUrl] = useState(initialData?.image || '');
   const [imagePreview, setImagePreview] = useState(initialData?.image || null);
+  const [imageInputType, setImageInputType] = useState('upload'); // 'upload' or 'url'
   const [newAdditionalImage, setNewAdditionalImage] = useState('');
   const [newRegistrationField, setNewRegistrationField] = useState('');
   const [errors, setErrors] = useState({});
@@ -69,6 +73,7 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
       }
 
       setImageFile(file);
+      setImageUrl(''); // Clear URL if file is selected
       setErrors(prev => ({ ...prev, image: '' }));
 
       // Create preview
@@ -78,6 +83,37 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleImageUrlChange = (e) => {
+    const url = e.target.value;
+    setImageUrl(url);
+    setImageFile(null); // Clear file if URL is entered
+    setImagePreview(url);
+    setErrors(prev => ({ ...prev, image: '' }));
+  };
+
+  // Auto-generate hashtag when title, category, or dates change
+  const generateHashtag = () => {
+    if (formData.title && formData.category && formData.start_date && formData.end_date) {
+      const eventName = formData.title.replace(/\s+/g, '').substring(0, 20);
+      const type = formData.category.replace(/\s+/g, '');
+      
+      // Format dates as DD-MM-YYYY
+      const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}-${month}-${year}`;
+      };
+      
+      const startDate = formatDate(formData.start_date);
+      const endDate = formatDate(formData.end_date);
+      
+      return `#${type}_${eventName}_${startDate}_${endDate}`;
+    }
+    return '';
   };
 
   const handleAddAdditionalImage = () => {
@@ -135,14 +171,20 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
       newErrors.category = 'Category is required';
     }
 
-    if (!imageFile && !imagePreview) {
-      newErrors.image = 'Image is required';
+    if (!formData.start_date) {
+      newErrors.start_date = 'Start date is required';
     }
 
-    if (!formData.hashtag.trim()) {
-      newErrors.hashtag = 'Hashtag is required';
-    } else if (!validateHashtagFormat(formData.hashtag)) {
-      newErrors.hashtag = 'Hashtag must follow format: #type_eventName_DD-MM-YYYY_DD-MM-YYYY';
+    if (!formData.end_date) {
+      newErrors.end_date = 'End date is required';
+    }
+
+    if (formData.start_date && formData.end_date && new Date(formData.start_date) > new Date(formData.end_date)) {
+      newErrors.end_date = 'End date must be after start date';
+    }
+
+    if (!imageFile && !imageUrl && !imagePreview) {
+      newErrors.image = 'Image is required (upload or provide URL)';
     }
 
     setErrors(newErrors);
@@ -159,7 +201,15 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
     setIsSubmitting(true);
 
     try {
-      await onSubmit(formData, imageFile);
+      // Generate hashtag automatically
+      const hashtag = generateHashtag();
+      const submissionData = {
+        ...formData,
+        hashtag
+      };
+      
+      // Pass both form data and image (file or URL)
+      await onSubmit(submissionData, imageFile, imageUrl);
     } catch (error) {
       console.error('Form submission error:', error);
       setErrors(prev => ({ ...prev, submit: error.message }));
@@ -235,33 +285,131 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
           )}
         </div>
 
-        {/* Image Upload */}
-        <div>
-          <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-2">
-            Main Image *
-          </label>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-colors duration-200">
-              <FaImage />
-              <span>Choose Image</span>
-              <input
-                type="file"
-                id="image"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="hidden"
-              />
+        {/* Event Dates */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-2">
+              <FaCalendarAlt className="inline mr-2" />
+              Start Date *
             </label>
-            {imagePreview && (
-              <div className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-300">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+            <input
+              type="date"
+              id="start_date"
+              name="start_date"
+              value={formData.start_date}
+              onChange={handleInputChange}
+              className={`w-full px-4 py-2 border ${errors.start_date ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+            {errors.start_date && (
+              <p className="mt-1 text-sm text-red-600">{errors.start_date}</p>
             )}
           </div>
+
+          <div>
+            <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-2">
+              <FaCalendarAlt className="inline mr-2" />
+              End Date *
+            </label>
+            <input
+              type="date"
+              id="end_date"
+              name="end_date"
+              value={formData.end_date}
+              onChange={handleInputChange}
+              className={`w-full px-4 py-2 border ${errors.end_date ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+            {errors.end_date && (
+              <p className="mt-1 text-sm text-red-600">{errors.end_date}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Auto-generated Hashtag Preview */}
+        {formData.title && formData.category && formData.start_date && formData.end_date && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-gray-700">
+              <span className="font-medium">Auto-generated Hashtag:</span>
+              <span className="ml-2 text-blue-600 font-mono">{generateHashtag()}</span>
+            </p>
+          </div>
+        )}
+
+        {/* Image Upload or URL */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Main Image *
+          </label>
+          
+          {/* Toggle between upload and URL */}
+          <div className="flex gap-4 mb-3">
+            <button
+              type="button"
+              onClick={() => setImageInputType('upload')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                imageInputType === 'upload'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Upload Image
+            </button>
+            <button
+              type="button"
+              onClick={() => setImageInputType('url')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                imageInputType === 'url'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Image URL
+            </button>
+          </div>
+
+          {imageInputType === 'upload' ? (
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-colors duration-200">
+                <FaImage />
+                <span>Choose Image</span>
+                <input
+                  type="file"
+                  id="image"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+              </label>
+              {imagePreview && (
+                <div className="relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-300">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={handleImageUrlChange}
+                placeholder="Enter image URL (e.g., https://example.com/image.jpg)"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {imagePreview && (
+                <div className="mt-3 relative w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-300">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          
           {errors.image && (
             <p className="mt-1 text-sm text-red-600">{errors.image}</p>
           )}
@@ -309,29 +457,6 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
           )}
         </div>
 
-        {/* Hashtag */}
-        <div>
-          <label htmlFor="hashtag" className="block text-sm font-medium text-gray-700 mb-2">
-            <FaCalendarAlt className="inline mr-2" />
-            Event Hashtag *
-          </label>
-          <input
-            type="text"
-            id="hashtag"
-            name="hashtag"
-            value={formData.hashtag}
-            onChange={handleInputChange}
-            className={`w-full px-4 py-2 border ${errors.hashtag ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500`}
-            placeholder="#type_eventName_DD-MM-YYYY_DD-MM-YYYY"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Format: #type_eventName_startDate_endDate (dates in DD-MM-YYYY)
-          </p>
-          {errors.hashtag && (
-            <p className="mt-1 text-sm text-red-600">{errors.hashtag}</p>
-          )}
-        </div>
-
         {/* Registration Toggle */}
         <div className="flex items-center gap-3">
           <input
@@ -347,45 +472,72 @@ const AnnouncementForm = ({ onSubmit, onCancel, initialData = null }) => {
           </label>
         </div>
 
-        {/* Registration Fields */}
+        {/* Registration Settings */}
         {formData.registration_enabled && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Registration Fields
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={newRegistrationField}
-                onChange={(e) => setNewRegistrationField(e.target.value)}
-                placeholder="Enter field name (e.g., Phone Number)"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddRegistrationField}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+          <>
+            {/* Role Restriction */}
+            <div>
+              <label htmlFor="registration_role_restriction" className="block text-sm font-medium text-gray-700 mb-2">
+                Who Can Register?
+              </label>
+              <select
+                id="registration_role_restriction"
+                name="registration_role_restriction"
+                value={formData.registration_role_restriction}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <FaPlus />
-              </button>
+                <option value="all">All (Students & Teachers)</option>
+                <option value="students">Students Only</option>
+                <option value="teachers">Teachers Only</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Restrict registration to specific user roles
+              </p>
             </div>
-            {formData.registration_fields.length > 0 && (
-              <div className="space-y-2 mt-2">
-                {formData.registration_fields.map((field, index) => (
-                  <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                    <span className="flex-1 text-sm text-gray-700">{field}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRegistrationField(index)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <FaTimes />
-                    </button>
-                  </div>
-                ))}
+
+            {/* Registration Fields */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Registration Fields
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Name, Email, and Role are automatically captured. Add any additional fields below.
+              </p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={newRegistrationField}
+                  onChange={(e) => setNewRegistrationField(e.target.value)}
+                  placeholder="Enter field name (e.g., Phone Number, Department)"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddRegistrationField}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  <FaPlus />
+                </button>
               </div>
-            )}
-          </div>
+              {formData.registration_fields.length > 0 && (
+                <div className="space-y-2 mt-2">
+                  {formData.registration_fields.map((field, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                      <span className="flex-1 text-sm text-gray-700">{field}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRegistrationField(index)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <FaTimes />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
 
         {/* Submit Error */}

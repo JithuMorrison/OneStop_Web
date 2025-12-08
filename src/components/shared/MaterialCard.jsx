@@ -1,6 +1,7 @@
 // src/components/shared/MaterialCard.jsx
 import React, { useState } from 'react';
-import { FaHeart, FaRegHeart, FaComment, FaShare, FaFileAlt, FaExternalLinkAlt, FaDownload } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaComment, FaShare, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes } from 'react-icons/fa';
+import * as chatService from '../../services/chatService.jsx';
 
 /**
  * MaterialCard component displays a single material with interaction options
@@ -15,9 +16,21 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [chatContacts, setChatContacts] = useState([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [sharingTo, setSharingTo] = useState(null);
 
   // Check if current user has liked this material
-  const currentUserId = localStorage.getItem('userId');
+  const getCurrentUserId = () => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      return user._id || user.id;
+    }
+    return localStorage.getItem('userId'); // Fallback
+  };
+  const currentUserId = getCurrentUserId();
   const isLiked = material.liked_by?.includes(currentUserId);
 
   const handleLikeClick = () => {
@@ -43,9 +56,54 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
     }
   };
 
-  const handleShareClick = () => {
-    if (onShare) {
-      onShare(material._id);
+  const handleShareClick = async () => {
+    setShowShareModal(true);
+    await loadChatContacts();
+  };
+
+  const loadChatContacts = async () => {
+    try {
+      setLoadingContacts(true);
+      const threads = await chatService.getChatThreads();
+      
+      // Extract unique contacts - get current user ID correctly
+      const userStr = localStorage.getItem('user');
+      const currentUserId = userStr ? JSON.parse(userStr)?._id : null;
+      
+      const contacts = threads.map(thread => {
+        const otherUser = thread.participants.find(p => {
+          const participantId = p._id || p;
+          return participantId !== currentUserId;
+        });
+        return otherUser ? {
+          id: otherUser._id || otherUser,
+          name: otherUser.username || otherUser.name || 'Unknown',
+          email: otherUser.email || '',
+          chatId: thread._id
+        } : null;
+      }).filter(Boolean);
+      
+      setChatContacts(contacts);
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const handleShareToContact = async (contact) => {
+    try {
+      setSharingTo(contact.id);
+      const shareMessage = `Check out this material: "${material.title}"\n\nMaterial ID: ${material._id}`;
+      
+      await chatService.sendMessage(contact.chatId, shareMessage);
+      alert(`Shared with ${contact.name}!`);
+      setShowShareModal(false);
+    } catch (error) {
+      console.error('Error sharing:', error);
+      alert('Failed to share. Please try again.');
+    } finally {
+      setSharingTo(null);
     }
   };
 
@@ -72,7 +130,8 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-4 hover:shadow-lg transition-shadow">
+    <>
+      <div className="bg-white rounded-lg shadow-md p-6 mb-4 hover:shadow-lg transition-shadow">
       {/* Material Header - Uploader Info */}
       <div className="flex items-center mb-4">
         <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
@@ -224,7 +283,114 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
           )}
         </div>
       )}
-    </div>
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Share Material</h3>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto max-h-96">
+              {loadingContacts ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading contacts...</p>
+                </div>
+              ) : chatContacts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No chat contacts found.</p>
+                  <p className="text-sm mt-2">Start a conversation to share content!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chatContacts.map((contact) => (
+                    <button
+                      key={contact.id}
+                      onClick={() => handleShareToContact(contact)}
+                      disabled={sharingTo === contact.id}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-semibold">
+                        {contact.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="font-medium text-gray-900">{contact.name}</p>
+                        <p className="text-sm text-gray-500">{contact.email}</p>
+                      </div>
+                      {sharingTo === contact.id && (
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-blue-500"></div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+    
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Share Material</h3>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto max-h-96">
+              {loadingContacts ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Loading contacts...</p>
+                </div>
+              ) : chatContacts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No chat contacts found.</p>
+                  <p className="text-sm mt-2">Start a conversation to share content!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chatContacts.map((contact) => (
+                    <button
+                      key={contact.id}
+                      onClick={() => handleShareToContact(contact)}
+                      disabled={sharingTo === contact.id}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-semibold">
+                        {contact.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="font-medium text-gray-900">{contact.name}</p>
+                        <p className="text-sm text-gray-500">{contact.email}</p>
+                      </div>
+                      {sharingTo === contact.id && (
+                        <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-blue-500"></div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

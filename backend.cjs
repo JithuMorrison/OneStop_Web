@@ -263,8 +263,9 @@ const ChatSchema = new mongoose.Schema({
   messages: [{
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     content: String,
-    timestamp: { type: Date, default: Date.now, index: { expires: '10h' } } // Auto-delete after 10 hours
-  }]
+    timestamp: { type: Date, default: Date.now }
+  }],
+  createdAt: { type: Date, default: Date.now }
 });
 
 const Chat = mongoose.model('Chat', ChatSchema);
@@ -3547,8 +3548,33 @@ const createWorldChat = async () => {
   }
 };
 
+// Cleanup old chat messages (older than 5 days) but keep chat connections
+const cleanupOldMessages = async () => {
+  try {
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    
+    const result = await Chat.updateMany(
+      { 'messages.timestamp': { $lt: fiveDaysAgo } },
+      { $pull: { messages: { timestamp: { $lt: fiveDaysAgo } } } }
+    );
+    
+    if (result.modifiedCount > 0) {
+      console.log(`Cleaned up old messages from ${result.modifiedCount} chats`);
+    }
+  } catch (err) {
+    console.error('Error cleaning up old messages:', err);
+  }
+};
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   await createWorldChat();
+  
+  // Run cleanup immediately on startup
+  await cleanupOldMessages();
+  
+  // Run cleanup every 6 hours
+  setInterval(cleanupOldMessages, 24 * 60 * 60 * 1000);
+  console.log('Chat message cleanup job scheduled (runs every 6 hours)');
 });

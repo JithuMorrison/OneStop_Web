@@ -64,7 +64,7 @@ const NotificationBell = () => {
         // Navigate to the specific post/announcement/material
         // We need to determine the content type from the notification
         // For now, navigate to profile or feed
-        navigate('/feed');
+        navigate('/announcements');
         break;
       case 'announcement':
         navigate('/announcements');

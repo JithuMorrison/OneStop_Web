@@ -105,10 +105,10 @@ const TeacherDashboard = () => {
    */
   const adminTools = [
     {
-      name: 'Exam Schedules',
-      description: 'Create and manage exam schedules',
+      name: 'Timetable',
+      description: 'Manage exam timetables',
       icon: FiCalendar,
-      path: '/exam-schedules',
+      path: '/timetable',
       color: 'bg-blue-500',
       bgColor: 'bg-blue-50',
       textColor: 'text-blue-600'
@@ -133,10 +133,10 @@ const TeacherDashboard = () => {
       textColor: 'text-purple-600'
     },
     {
-      name: 'Events',
-      description: 'Manage campus events',
+      name: 'Calendar',
+      description: 'View campus events',
       icon: FiUsers,
-      path: '/events',
+      path: '/calendar',
       color: 'bg-indigo-500',
       bgColor: 'bg-indigo-50',
       textColor: 'text-indigo-600'
@@ -167,8 +167,16 @@ const TeacherDashboard = () => {
           Teacher Dashboard
         </h1>
         <p className="text-gray-600 mt-2">
-          Welcome back, {user?.name || user?.username}
+          Welcome back, {user?.name || user?.username}!
         </p>
+        <div className="mt-2 text-sm text-gray-500">
+          {user?.dept || user?.department} Department
+          {user?.streak > 0 && (
+            <span className="ml-3 text-orange-600 font-medium">
+              🔥 {user.streak} day streak
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -272,7 +280,7 @@ const TeacherDashboard = () => {
                 Your Upcoming Events
               </h2>
               <button
-                onClick={() => navigate('/events')}
+                onClick={() => navigate('/calendar')}
                 className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
                 View All
@@ -313,7 +321,7 @@ const TeacherDashboard = () => {
                 <FiCalendar size={48} className="mx-auto mb-3 opacity-50" />
                 <p>No upcoming events</p>
                 <button
-                  onClick={() => navigate('/exam-schedules')}
+                  onClick={() => navigate('/timetable')}
                   className="mt-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                 >
                   Create Exam Schedule
@@ -331,7 +339,7 @@ const TeacherDashboard = () => {
               Recent Announcements
             </h2>
             <button
-              onClick={() => navigate('/announcements/create')}
+              onClick={() => navigate('/announcements')}
               className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
             >
               Create
@@ -363,7 +371,7 @@ const TeacherDashboard = () => {
               <FiBell size={48} className="mx-auto mb-3 opacity-50" />
               <p className="text-sm">No announcements yet</p>
               <button
-                onClick={() => navigate('/announcements/create')}
+                onClick={() => navigate('/announcements')}
                 className="mt-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
                 Create Announcement
@@ -405,7 +413,7 @@ const TeacherDashboard = () => {
       {/* Quick Actions */}
       <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
-          onClick={() => navigate('/exam-schedules/create')}
+          onClick={() => navigate('/timetable')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-indigo-500 hover:bg-indigo-50 transition-all text-center"
         >
           <FiCalendar size={32} className="mx-auto mb-2 text-gray-400" />
@@ -413,7 +421,7 @@ const TeacherDashboard = () => {
         </button>
         
         <button
-          onClick={() => navigate('/announcements/create')}
+          onClick={() => navigate('/announcements')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-purple-500 hover:bg-purple-50 transition-all text-center"
         >
           <FiBell size={32} className="mx-auto mb-2 text-gray-400" />
@@ -421,11 +429,11 @@ const TeacherDashboard = () => {
         </button>
         
         <button
-          onClick={() => navigate('/events/create')}
+          onClick={() => navigate('/materials')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-green-500 hover:bg-green-50 transition-all text-center"
         >
           <FiUsers size={32} className="mx-auto mb-2 text-gray-400" />
-          <p className="font-medium text-gray-700">Create Event</p>
+          <p className="font-medium text-gray-700">Create Materials</p>
         </button>
       </div>
     </div>

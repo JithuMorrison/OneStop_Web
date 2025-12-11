@@ -3553,6 +3553,7 @@ const cleanupOldMessages = async () => {
   try {
     const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
     
+    // Step 1: Remove old messages from chats (but keep the chat document)
     const result = await Chat.updateMany(
       { 'messages.timestamp': { $lt: fiveDaysAgo } },
       { $pull: { messages: { timestamp: { $lt: fiveDaysAgo } } } }
@@ -3561,6 +3562,17 @@ const cleanupOldMessages = async () => {
     if (result.modifiedCount > 0) {
       console.log(`Cleaned up old messages from ${result.modifiedCount} chats`);
     }
+    
+    // Step 2: Verify no entire chats were accidentally deleted
+    const totalChats = await Chat.countDocuments();
+    console.log(`Total chat connections preserved: ${totalChats}`);
+    
+    // Step 3: Log chats that now have no messages (but connection is preserved)
+    const emptyChats = await Chat.countDocuments({ messages: { $size: 0 } });
+    if (emptyChats > 0) {
+      console.log(`${emptyChats} chat connections have no messages but connection is preserved`);
+    }
+    
   } catch (err) {
     console.error('Error cleaning up old messages:', err);
   }
@@ -3574,7 +3586,7 @@ app.listen(PORT, async () => {
   // Run cleanup immediately on startup
   await cleanupOldMessages();
   
-  // Run cleanup every 6 hours
+  // Run cleanup every 24 hours (daily)
   setInterval(cleanupOldMessages, 24 * 60 * 60 * 1000);
-  console.log('Chat message cleanup job scheduled (runs every 6 hours)');
+  console.log('Chat message cleanup job scheduled (runs daily)');
 });

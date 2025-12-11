@@ -79,9 +79,9 @@ const Announcements = () => {
     }
   };
 
-  const handleCreateAnnouncement = async (formData, imageFile) => {
+  const handleCreateAnnouncement = async (formData, imageFile, imageUrl) => {
     try {
-      await announcementService.createAnnouncement(formData, imageFile);
+      await announcementService.createAnnouncement(formData, imageFile, imageUrl);
       setShowCreateForm(false);
       await loadAnnouncements();
       alert('Announcement created successfully!');
@@ -139,10 +139,31 @@ const Announcements = () => {
     }
   };
 
+  const handleShare = async (announcementId, type) => {
+    // Share functionality is handled within AnnouncementCard component
+    console.log('Share announcement:', announcementId, type);
+  };
+
   const handleRegister = (announcementId) => {
     const announcement = announcements.find(a => a._id === announcementId);
     if (announcement) {
+      // Check role restriction
+      const userRole = currentUser?.role || 'student';
+      const roleRestriction = announcement.registration_role_restriction || 'all';
+      
+      if (roleRestriction !== 'all') {
+        if (roleRestriction === 'students' && userRole !== 'student') {
+          alert('Only students can register for this event.');
+          return;
+        }
+        if (roleRestriction === 'teachers' && userRole !== 'teacher') {
+          alert('Only teachers can register for this event.');
+          return;
+        }
+      }
+      
       setSelectedAnnouncement(announcement);
+      // Initialize with empty data - user info will be auto-populated by backend
       setRegistrationData({});
       setShowRegistrationModal(true);
     }
@@ -257,6 +278,7 @@ const Announcements = () => {
                 onLike={handleLike}
                 onComment={handleComment}
                 onRegister={handleRegister}
+                onShare={handleShare}
                 currentUserId={currentUser?._id}
               />
             ))}
@@ -285,48 +307,47 @@ const Announcements = () => {
                 </p>
 
                 <form onSubmit={handleRegistrationSubmit} className="space-y-4">
-                  {/* Default Fields */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={registrationData.name || ''}
-                      onChange={(e) => handleRegistrationFieldChange('name', e.target.value)}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      value={registrationData.email || ''}
-                      onChange={(e) => handleRegistrationFieldChange('email', e.target.value)}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                  {/* Auto-populated User Info (Read-only display) */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium text-blue-900 mb-2">Your Information (Auto-filled)</p>
+                    <div className="grid grid-cols-1 gap-2 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700">Name:</span>
+                        <span className="ml-2 text-gray-900">{currentUser?.name || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Email:</span>
+                        <span className="ml-2 text-gray-900">{currentUser?.email || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Role:</span>
+                        <span className="ml-2 text-gray-900 capitalize">{currentUser?.role || 'N/A'}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Custom Registration Fields */}
-                  {selectedAnnouncement.registration_fields?.map((field, index) => (
-                    <div key={index}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {field} *
-                      </label>
-                      <input
-                        type="text"
-                        value={registrationData[field] || ''}
-                        onChange={(e) => handleRegistrationFieldChange(field, e.target.value)}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  ))}
+                  {selectedAnnouncement.registration_fields && selectedAnnouncement.registration_fields.length > 0 ? (
+                    <>
+                      <p className="text-sm font-medium text-gray-700">Additional Information Required:</p>
+                      {selectedAnnouncement.registration_fields.map((field, index) => (
+                        <div key={index}>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {field} *
+                          </label>
+                          <input
+                            type="text"
+                            value={registrationData[field] || ''}
+                            onChange={(e) => handleRegistrationFieldChange(field, e.target.value)}
+                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No additional information required.</p>
+                  )}
 
                   <div className="flex gap-4 pt-4">
                     <button

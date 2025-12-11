@@ -137,63 +137,64 @@ const AdminDashboard = () => {
    */
   const managementTools = [
     {
+      name: 'Manage Users',
+      description: 'View and manage user accounts',
+      icon: FiUsers,
+      path: '/admin/users',
+      color: 'bg-blue-500',
+      bgColor: 'bg-blue-50',
+      textColor: 'text-blue-600',
+      count: dashboardData.userCounts.total
+    },
+    {
       name: 'Manage Clubs',
       description: 'Create and manage campus clubs',
       icon: FiUsers,
       path: '/clubs',
-      color: 'bg-blue-500',
-      bgColor: 'bg-blue-50',
-      textColor: 'text-blue-600',
+      color: 'bg-indigo-500',
+      bgColor: 'bg-indigo-50',
+      textColor: 'text-indigo-600',
       count: dashboardData.systemStats.clubs
     },
     {
-      name: 'Manage Portals',
+      name: 'Manage Portals & Tools',
       description: 'Add and configure portals',
       icon: FiExternalLink,
-      path: '/admin/portals',
+      path: '/portals-tools',
       color: 'bg-purple-500',
       bgColor: 'bg-purple-50',
       textColor: 'text-purple-600',
       count: dashboardData.systemStats.portals
     },
     {
-      name: 'Manage Tools',
+      name: 'Latest Announcements',
       description: 'Add and configure tools',
       icon: FiTool,
-      path: '/admin/tools',
+      path: '/announcements',
       color: 'bg-green-500',
       bgColor: 'bg-green-50',
       textColor: 'text-green-600',
       count: dashboardData.systemStats.tools
     },
     {
-      name: 'User Roles',
-      description: 'Manage user roles and permissions',
-      icon: FiSettings,
-      path: '/admin/users',
-      color: 'bg-indigo-500',
-      bgColor: 'bg-indigo-50',
-      textColor: 'text-indigo-600',
-      count: dashboardData.userCounts.total
+      name: 'Latest Posts',
+      description: 'Add and configure tools',
+      icon: FiTool,
+      path: '/posts',
+      color: 'bg-green-500',
+      bgColor: 'bg-green-50',
+      textColor: 'text-green-600',
+      count: dashboardData.systemStats.tools
     },
     {
       name: 'Queries',
       description: 'View and respond to user queries',
       icon: FiMessageCircle,
-      path: '/admin/queries',
+      path: '/queries',
       color: 'bg-orange-500',
       bgColor: 'bg-orange-50',
       textColor: 'text-orange-600',
       badge: dashboardData.pendingQueriesCount
-    },
-    {
-      name: 'Create Teacher',
-      description: 'Add new teacher accounts',
-      icon: FiUserPlus,
-      path: '/admin/create-teacher',
-      color: 'bg-pink-500',
-      bgColor: 'bg-pink-50',
-      textColor: 'text-pink-600'
     }
   ];
 
@@ -306,7 +307,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
               <button
-                onClick={() => navigate('/admin/queries')}
+                onClick={() => navigate('/queries')}
                 className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
               >
                 Review Queries
@@ -379,7 +380,7 @@ const AdminDashboard = () => {
               Recent Queries
             </h3>
             <button
-              onClick={() => navigate('/admin/queries')}
+              onClick={() => navigate('/queries')}
               className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
             >
               View All
@@ -392,7 +393,7 @@ const AdminDashboard = () => {
                 <div
                   key={index}
                   className="flex items-start p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => navigate('/admin/queries')}
+                  onClick={() => navigate('/queries')}
                 >
                   <div className={`p-2 rounded-lg mr-4 ${
                     query.status === 'pending' ? 'bg-orange-100' : 'bg-green-100'
@@ -436,7 +437,7 @@ const AdminDashboard = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <button
-          onClick={() => navigate('/admin/clubs/create')}
+          onClick={() => navigate('/clubs')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-blue-500 hover:bg-blue-50 transition-all text-center"
         >
           <FiUsers size={32} className="mx-auto mb-2 text-gray-400" />
@@ -444,7 +445,7 @@ const AdminDashboard = () => {
         </button>
         
         <button
-          onClick={() => navigate('/admin/portals/create')}
+          onClick={() => navigate('/portals-tools')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-purple-500 hover:bg-purple-50 transition-all text-center"
         >
           <FiExternalLink size={32} className="mx-auto mb-2 text-gray-400" />
@@ -452,7 +453,7 @@ const AdminDashboard = () => {
         </button>
         
         <button
-          onClick={() => navigate('/admin/tools/create')}
+          onClick={() => navigate('/portals-tools')}
           className="bg-white border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-green-500 hover:bg-green-50 transition-all text-center"
         >
           <FiTool size={32} className="mx-auto mb-2 text-gray-400" />

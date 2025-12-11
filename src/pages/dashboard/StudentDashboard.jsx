@@ -26,8 +26,8 @@ const StudentDashboard = () => {
   const [dashboardData, setDashboardData] = useState({
     streak: 0,
     upcomingEvents: [],
-    followedAnnouncements: [],
-    followedPosts: [],
+    likedAnnouncements: [],
+    likedPosts: [],
     badges: [],
     achievements: []
   });
@@ -41,8 +41,8 @@ const StudentDashboard = () => {
   /**
    * Fetch all dashboard data
    * Requirement 3.2: Display current streak count
-   * Requirement 3.3: Display upcoming events
-   * Requirement 3.4: Display followed announcements and posts
+   * Requirement 3.3: Display upcoming events (within 1 month)
+   * Requirement 3.4: Display liked announcements and posts
    */
   const fetchDashboardData = async () => {
     try {
@@ -62,15 +62,15 @@ const StudentDashboard = () => {
       
       const events = eventsResponse.ok ? await eventsResponse.json() : [];
 
-      // Fetch followed announcements (placeholder - will be implemented)
-      const announcementsResponse = await fetch('http://localhost:5000/api/announcements/followed', {
+      // Fetch liked announcements
+      const announcementsResponse = await fetch('http://localhost:5000/api/announcements/liked', {
         headers: { 'Authorization': `Bearer ${token}` }
       }).catch(() => ({ ok: false }));
       
       const announcements = announcementsResponse.ok ? await announcementsResponse.json() : [];
 
-      // Fetch followed posts (placeholder - will be implemented)
-      const postsResponse = await fetch('http://localhost:5000/api/posts/followed', {
+      // Fetch liked posts
+      const postsResponse = await fetch('http://localhost:5000/api/posts/liked', {
         headers: { 'Authorization': `Bearer ${token}` }
       }).catch(() => ({ ok: false }));
       
@@ -79,8 +79,8 @@ const StudentDashboard = () => {
       setDashboardData({
         streak: userData.streak || 0,
         upcomingEvents: Array.isArray(events) ? events.slice(0, 5) : [],
-        followedAnnouncements: Array.isArray(announcements) ? announcements.slice(0, 3) : [],
-        followedPosts: Array.isArray(posts) ? posts.slice(0, 3) : [],
+        likedAnnouncements: Array.isArray(announcements) ? announcements.slice(0, 3) : [],
+        likedPosts: Array.isArray(posts) ? posts.slice(0, 3) : [],
         badges: userData.badges || [],
         achievements: userData.achievements || []
       });
@@ -229,10 +229,10 @@ const StudentDashboard = () => {
                 Upcoming Events
               </h2>
               <button
-                onClick={() => navigate('/events')}
+                onClick={() => navigate('/calendar')}
                 className="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                View All
+                View Calendar
               </button>
             </div>
             
@@ -301,14 +301,14 @@ const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* Followed Content Section - Requirement 3.4 */}
+      {/* Liked Content Section - Requirement 3.4 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        {/* Followed Announcements */}
+        {/* Liked Announcements */}
         <div className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
               <FiBell className="mr-2 text-purple-600" />
-              Followed Announcements
+              Liked Announcements
             </h2>
             <button
               onClick={() => navigate('/announcements')}
@@ -318,9 +318,9 @@ const StudentDashboard = () => {
             </button>
           </div>
           
-          {dashboardData.followedAnnouncements.length > 0 ? (
+          {dashboardData.likedAnnouncements.length > 0 ? (
             <div className="space-y-3">
-              {dashboardData.followedAnnouncements.map((announcement, index) => (
+              {dashboardData.likedAnnouncements.map((announcement, index) => (
                 <div
                   key={index}
                   className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
@@ -339,17 +339,17 @@ const StudentDashboard = () => {
           ) : (
             <div className="text-center py-8 text-gray-500">
               <FiBell size={48} className="mx-auto mb-3 opacity-50" />
-              <p>No followed announcements</p>
+              <p>No liked announcements</p>
             </div>
           )}
         </div>
 
-        {/* Followed Posts */}
+        {/* Liked Posts */}
         <div className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
               <FiFileText className="mr-2 text-green-600" />
-              Followed Posts
+              Liked Posts
             </h2>
             <button
               onClick={() => navigate('/posts')}
@@ -359,9 +359,9 @@ const StudentDashboard = () => {
             </button>
           </div>
           
-          {dashboardData.followedPosts.length > 0 ? (
+          {dashboardData.likedPosts.length > 0 ? (
             <div className="space-y-3">
-              {dashboardData.followedPosts.map((post, index) => (
+              {dashboardData.likedPosts.map((post, index) => (
                 <div
                   key={index}
                   className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
@@ -382,7 +382,7 @@ const StudentDashboard = () => {
           ) : (
             <div className="text-center py-8 text-gray-500">
               <FiFileText size={48} className="mx-auto mb-3 opacity-50" />
-              <p>No followed posts</p>
+              <p>No liked posts</p>
             </div>
           )}
         </div>

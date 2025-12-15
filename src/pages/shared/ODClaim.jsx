@@ -7,6 +7,8 @@ import {
   updateODStatus
 } from '../../services/odService.jsx';
 import axios from 'axios';
+import { supabase } from '../../services/supabaseClient.jsx';
+import { FaPlus, FaTimes, FaUpload } from 'react-icons/fa';
 
 /**
  * ODClaim page component
@@ -26,8 +28,15 @@ const ODClaim = () => {
     event_name: '',
     teacher_id: '',
     description: '',
-    event_id: ''
+    event_id: '',
+    dates: [],
+    proof_url: ''
   });
+  
+  // Date and file upload state
+  const [newDate, setNewDate] = useState('');
+  const [proofFile, setProofFile] = useState(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
   
   // Teacher filter state
   const [statusFilter, setStatusFilter] = useState('all');
@@ -35,9 +44,13 @@ const ODClaim = () => {
   // Teachers list for dropdown
   const [teachers, setTeachers] = useState([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
+  
+  // Events list for dropdown
+  const [events, setEvents] = useState([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   /**
-   * Fetch teachers for the dropdown
+   * Fetch teachers and events for the dropdowns
    */
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -57,7 +70,25 @@ const ODClaim = () => {
       }
     };
 
+    const fetchEvents = async () => {
+      if (user?.role !== 'student') return;
+      
+      setLoadingEvents(true);
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5000/api/events', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setEvents(response.data || []);
+      } catch (err) {
+        console.error('Error fetching events:', err);
+      } finally {
+        setLoadingEvents(false);
+      }
+    };
+
     fetchTeachers();
+    fetchEvents();
   }, [user]);
 
   /**
@@ -72,11 +103,12 @@ const ODClaim = () => {
 
       try {
         let claims;
+        const userId = user._id || user.id;
         if (user.role === 'student') {
-          claims = await getStudentODClaims(user.id);
+          claims = await getStudentODClaims(userId);
         } else if (user.role === 'teacher') {
           const status = statusFilter === 'all' ? null : statusFilter;
-          claims = await getTeacherODClaims(user.id, status);
+          claims = await getTeacherODClaims(userId, status);
         }
         setOdClaims(claims || []);
       } catch (err) {
@@ -102,6 +134,77 @@ const ODClaim = () => {
   };
 
   /**
+   * Add date to the dates array
+   */
+  const handleAddDate = () => {
+    if (newDate && !formData.dates.includes(newDate)) {
+      setFormData(prev => ({
+        ...prev,
+        dates: [...prev.dates, newDate].sort()
+      }));
+      setNewDate('');
+    }
+  };
+
+  /**
+   * Remove date from the dates array
+   */
+  const handleRemoveDate = (dateToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      dates: prev.dates.filter(date => date !== dateToRemove)
+    }));
+  };
+
+  /**
+   * Handle proof file upload to Supabase
+   */
+  const handleProofUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB');
+      return;
+    }
+
+    setUploadingProof(true);
+    setError(null);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `od-claims/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('jithu')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw new Error(`File upload failed: ${uploadError.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('jithu')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({
+        ...prev,
+        proof_url: publicUrl
+      }));
+      setProofFile(file);
+      setSuccess('Proof file uploaded successfully!');
+    } catch (err) {
+      console.error('Error uploading proof:', err);
+      setError(err.message || 'Failed to upload proof file');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
+  /**
    * Handle OD claim submission (students)
    */
   const handleSubmit = async (e) => {
@@ -115,12 +218,20 @@ const ODClaim = () => {
       return;
     }
 
+    // Validate dates
+    if (formData.dates.length === 0) {
+      setError('Please add at least one date for the OD claim');
+      return;
+    }
+
     try {
       const result = await createODClaim({
         event_name: formData.event_name,
         teacher_id: formData.teacher_id,
         description: formData.description,
-        event_id: formData.event_id || null
+        event_id: formData.event_id || null,
+        dates: formData.dates,
+        proof_url: formData.proof_url || null
       });
 
       setSuccess('OD claim submitted successfully!');
@@ -130,11 +241,16 @@ const ODClaim = () => {
         event_name: '',
         teacher_id: '',
         description: '',
-        event_id: ''
+        event_id: '',
+        dates: [],
+        proof_url: ''
       });
+      setProofFile(null);
+      setNewDate('');
 
       // Refresh claims list
-      const claims = await getStudentODClaims(user.id);
+      const userId = user._id || user.id;
+      const claims = await getStudentODClaims(userId);
       setOdClaims(claims || []);
     } catch (err) {
       console.error('Error creating OD claim:', err);
@@ -239,6 +355,30 @@ const ODClaim = () => {
               </div>
 
               <div>
+                <label htmlFor="event_id" className="block text-sm font-medium text-gray-700 mb-1">
+                  Related Event (Optional)
+                </label>
+                <select
+                  id="event_id"
+                  name="event_id"
+                  value={formData.event_id}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loadingEvents}
+                >
+                  <option value="">N/A - No event</option>
+                  {events.map(event => (
+                    <option key={event._id} value={event._id}>
+                      {event.name} ({event.type}) - {new Date(event.start_date).toLocaleDateString()}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select an event if this OD is related to a registered event
+                </p>
+              </div>
+
+              <div>
                 <label htmlFor="teacher_id" className="block text-sm font-medium text-gray-700 mb-1">
                   Responsible Teacher *
                 </label>
@@ -276,9 +416,95 @@ const ODClaim = () => {
                 />
               </div>
 
+              {/* Dates Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  OD Dates * (Add all dates you need OD for)
+                </label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddDate}
+                    disabled={!newDate}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 transition-colors flex items-center gap-2"
+                  >
+                    <FaPlus /> Add Date
+                  </button>
+                </div>
+                
+                {/* Display added dates */}
+                {formData.dates.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    <p className="text-sm text-gray-600">Selected Dates ({formData.dates.length}):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.dates.map((date, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-2 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full"
+                        >
+                          <span className="text-sm text-blue-900">
+                            {new Date(date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDate(date)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <FaTimes size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {formData.dates.length === 0 && (
+                  <p className="text-sm text-red-600 mt-1">Please add at least one date</p>
+                )}
+              </div>
+
+              {/* Proof Upload Section */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Proof Document (Optional)
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 cursor-pointer transition-colors">
+                    <FaUpload />
+                    <span>{uploadingProof ? 'Uploading...' : 'Upload Proof'}</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      onChange={handleProofUpload}
+                      className="hidden"
+                      disabled={uploadingProof}
+                    />
+                  </label>
+                  {proofFile && (
+                    <div className="flex items-center gap-2 text-sm text-green-600">
+                      <span>✓ {proofFile.name}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Upload certificate, invitation, or any proof document (PDF, Image, or Word - Max 5MB)
+                </p>
+              </div>
+
               <button
                 type="submit"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                disabled={formData.dates.length === 0}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
                 Submit OD Claim
               </button>
@@ -301,6 +527,42 @@ const ODClaim = () => {
                       </span>
                     </div>
                     <p className="text-gray-600 mb-2">{claim.description}</p>
+                    
+                    {/* Display OD Dates */}
+                    {claim.dates && claim.dates.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-sm font-medium text-gray-700 mb-1">OD Dates:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {claim.dates.map((date, index) => (
+                            <span
+                              key={index}
+                              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                            >
+                              {new Date(date).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Display Proof Link */}
+                    {claim.proof_url && (
+                      <div className="mb-2">
+                        <a
+                          href={claim.proof_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-purple-600 hover:text-purple-800 underline"
+                        >
+                          📎 View Proof Document
+                        </a>
+                      </div>
+                    )}
+                    
                     <div className="text-sm text-gray-500 space-y-1">
                       <p>
                         <span className="font-medium">Teacher:</span>{' '}
@@ -393,6 +655,42 @@ const ODClaim = () => {
                       </span>
                     </div>
                     <p className="text-gray-600 mb-3">{claim.description}</p>
+                    
+                    {/* Display OD Dates */}
+                    {claim.dates && claim.dates.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-sm font-medium text-gray-700 mb-1">OD Dates:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {claim.dates.map((date, index) => (
+                            <span
+                              key={index}
+                              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                            >
+                              {new Date(date).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Display Proof Link */}
+                    {claim.proof_url && (
+                      <div className="mb-3">
+                        <a
+                          href={claim.proof_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-purple-600 hover:text-purple-800 underline font-medium"
+                        >
+                          📎 View Proof Document
+                        </a>
+                      </div>
+                    )}
+                    
                     <div className="text-sm text-gray-500 mb-3">
                       <p>
                         <span className="font-medium">Submitted:</span>{' '}

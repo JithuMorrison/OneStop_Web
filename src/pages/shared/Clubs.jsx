@@ -25,12 +25,14 @@ const Clubs = () => {
   const [formData, setFormData] = useState({
     name: '',
     logoFile: null,
+    logoUrl: '',
     description: '',
     subdomains: '',
     moderators: [{ email: '', type: 'teacher' }],
     members: [],
     works_done: ''
   });
+  const [useImageUrl, setUseImageUrl] = useState(false);
 
   // Load clubs on mount
   useEffect(() => {
@@ -39,10 +41,33 @@ const Clubs = () => {
 
   // Check edit permissions for each club
   useEffect(() => {
-    if (clubs.length > 0 && currentUser) {
-      checkEditPermissions();
-    }
-  }, [clubs, currentUser]);
+    const checkPermissions = async () => {
+      if (clubs.length > 0 && currentUser) {
+        const permissions = {};
+        
+        // If admin, grant edit permission for all clubs
+        if (isAdmin) {
+          clubs.forEach(club => {
+            permissions[club._id] = true;
+          });
+          setEditPermissions(permissions);
+        } else {
+          // For non-admins, check each club individually
+          for (const club of clubs) {
+            try {
+              const canEdit = await clubService.canEditClub(currentUser.id, club._id);
+              permissions[club._id] = canEdit;
+            } catch (err) {
+              permissions[club._id] = false;
+            }
+          }
+          setEditPermissions(permissions);
+        }
+      }
+    };
+    
+    checkPermissions();
+  }, [clubs.length, currentUser?.id, isAdmin]); // Only depend on length and IDs, not the whole objects
 
   const loadClubs = async () => {
     try {
@@ -55,19 +80,6 @@ const Clubs = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const checkEditPermissions = async () => {
-    const permissions = {};
-    for (const club of clubs) {
-      try {
-        const canEdit = await clubService.canEditClub(currentUser.id, club._id);
-        permissions[club._id] = canEdit;
-      } catch (err) {
-        permissions[club._id] = false;
-      }
-    }
-    setEditPermissions(permissions);
   };
 
   const handleCreateClub = async (e) => {
@@ -101,7 +113,8 @@ const Clubs = () => {
       // Create club
       await clubService.createClub({
         name: formData.name,
-        logoFile: formData.logoFile,
+        logoFile: useImageUrl ? null : formData.logoFile,
+        logoUrl: useImageUrl ? formData.logoUrl : null,
         description: formData.description,
         subdomains,
         moderators
@@ -176,6 +189,18 @@ const Clubs = () => {
 
   const handleClubClick = (club) => {
     setSelectedClub(club);
+  };
+
+  const handleDeleteClub = async (clubId) => {
+    try {
+      await clubService.deleteClub(clubId);
+      await loadClubs();
+      if (selectedClub?._id === clubId) {
+        setSelectedClub(null);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const addModeratorField = () => {
@@ -258,14 +283,47 @@ const Clubs = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Club Logo *
               </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setFormData({ ...formData, logoFile: e.target.files[0] })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">Max 5MB, images only</p>
+              <div className="mb-2">
+                <label className="inline-flex items-center mr-4">
+                  <input
+                    type="radio"
+                    checked={!useImageUrl}
+                    onChange={() => setUseImageUrl(false)}
+                    className="mr-2"
+                  />
+                  Upload Image
+                </label>
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    checked={useImageUrl}
+                    onChange={() => setUseImageUrl(true)}
+                    className="mr-2"
+                  />
+                  Image URL
+                </label>
+              </div>
+              {useImageUrl ? (
+                <input
+                  type="url"
+                  value={formData.logoUrl}
+                  onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="https://example.com/logo.png"
+                  required
+                />
+              ) : (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setFormData({ ...formData, logoFile: e.target.files[0] })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Max 5MB, images only</p>
+                </>
+              )}
             </div>
 
             <div>
@@ -409,6 +467,73 @@ const Clubs = () => {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Members
+              </label>
+              {formData.members.map((member, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={member.name}
+                    onChange={(e) => {
+                      const newMembers = [...formData.members];
+                      newMembers[index].name = e.target.value;
+                      setFormData({ ...formData, members: newMembers });
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Member name"
+                  />
+                  <input
+                    type="email"
+                    value={member.email || ''}
+                    onChange={(e) => {
+                      const newMembers = [...formData.members];
+                      newMembers[index].email = e.target.value;
+                      setFormData({ ...formData, members: newMembers });
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Email"
+                  />
+                  <input
+                    type="text"
+                    value={member.subdomain || ''}
+                    onChange={(e) => {
+                      const newMembers = [...formData.members];
+                      newMembers[index].subdomain = e.target.value;
+                      setFormData({ ...formData, members: newMembers });
+                    }}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Subdomain"
+                  />
+                  {formData.members.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newMembers = formData.members.filter((_, i) => i !== index);
+                        setFormData({ ...formData, members: newMembers });
+                      }}
+                      className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    >
+                      <FaTimes />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData({
+                    ...formData,
+                    members: [...formData.members, { name: '', email: '', subdomain: '' }]
+                  });
+                }}
+                className="text-blue-600 hover:text-blue-700 text-sm"
+              >
+                + Add Member
+              </button>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Works Done (one per line)
               </label>
@@ -459,6 +584,7 @@ const Clubs = () => {
             club={selectedClub}
             canEdit={editPermissions[selectedClub._id]}
             onEdit={handleEditClick}
+            onDelete={isAdmin ? handleDeleteClub : null}
           />
         </div>
       )}
@@ -493,6 +619,7 @@ const Clubs = () => {
                     club={club}
                     canEdit={editPermissions[club._id]}
                     onEdit={handleEditClick}
+                    onDelete={isAdmin ? handleDeleteClub : null}
                   />
                 </div>
               ))}

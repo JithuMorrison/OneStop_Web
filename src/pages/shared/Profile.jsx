@@ -20,7 +20,7 @@ const Profile = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem('user'));
-  const currentUserId = currentUser?.id;
+  const currentUserId = currentUser?._id;
 
   // State
   const [profile, setProfile] = useState(null);
@@ -35,6 +35,7 @@ const Profile = () => {
   const [userPosts, setUserPosts] = useState([]);
   const [userAnnouncements, setUserAnnouncements] = useState([]);
   const [userMaterials, setUserMaterials] = useState([]);
+  const [registeredEvents, setRegisteredEvents] = useState([]);
   const [loadingContent, setLoadingContent] = useState(false);
 
   // Determine which user ID to fetch
@@ -94,6 +95,15 @@ const Profile = () => {
         const allMaterials = await materialService.getMaterials();
         const filtered = allMaterials.filter(mat => mat.uploaded_by?._id === profile._id);
         setUserMaterials(filtered);
+      } else if (activeTab === 'registered') {
+        // Fetch announcements where user is registered
+        const allAnnouncements = await announcementService.getAnnouncements();
+        const filtered = allAnnouncements.filter(ann => 
+          ann.registrations && ann.registrations.some(reg => 
+            (typeof reg === 'object' ? reg.user_id : reg) === profile._id
+          )
+        );
+        setRegisteredEvents(filtered);
       }
     } catch (err) {
       console.error('Error fetching user content:', err);
@@ -125,17 +135,139 @@ const Profile = () => {
   };
 
   const handleLike = async (contentId, contentType) => {
-    // Implement like functionality
-    console.log('Like:', contentId, contentType);
+    try {
+      const interactionService = await import('../../services/interactionService.jsx');
+      const result = await interactionService.default.likeContent(contentType + 's', contentId);
+      
+      // Update the content in local state
+      if (contentType === 'post') {
+        setUserPosts(prevPosts => 
+          prevPosts.map(post => {
+            if (post._id === contentId) {
+              return {
+                ...post,
+                likes: result.likes,
+                liked_by: result.liked 
+                  ? [...(post.liked_by || []), currentUserId]
+                  : (post.liked_by || []).filter(id => id !== currentUserId)
+              };
+            }
+            return post;
+          })
+        );
+      } else if (contentType === 'announcement') {
+        setUserAnnouncements(prevAnnouncements => 
+          prevAnnouncements.map(announcement => {
+            if (announcement._id === contentId) {
+              return {
+                ...announcement,
+                likes: result.likes,
+                liked_by: result.liked 
+                  ? [...(announcement.liked_by || []), currentUserId]
+                  : (announcement.liked_by || []).filter(id => id !== currentUserId)
+              };
+            }
+            return announcement;
+          })
+        );
+        setRegisteredEvents(prevEvents => 
+          prevEvents.map(announcement => {
+            if (announcement._id === contentId) {
+              return {
+                ...announcement,
+                likes: result.likes,
+                liked_by: result.liked 
+                  ? [...(announcement.liked_by || []), currentUserId]
+                  : (announcement.liked_by || []).filter(id => id !== currentUserId)
+              };
+            }
+            return announcement;
+          })
+        );
+      } else if (contentType === 'material') {
+        setUserMaterials(prevMaterials => 
+          prevMaterials.map(material => {
+            if (material._id === contentId) {
+              return {
+                ...material,
+                likes: result.likes,
+                liked_by: result.liked 
+                  ? [...(material.liked_by || []), currentUserId]
+                  : (material.liked_by || []).filter(id => id !== currentUserId)
+              };
+            }
+            return material;
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Error liking content:', err);
+      alert('Failed to like content. Please try again.');
+    }
   };
 
   const handleComment = async (contentId, commentText, contentType) => {
-    // Implement comment functionality
-    console.log('Comment:', contentId, commentText, contentType);
+    try {
+      const interactionService = await import('../../services/interactionService.jsx');
+      const result = await interactionService.default.addComment(contentType + 's', contentId, commentText);
+      
+      // Update the content in local state
+      if (contentType === 'post') {
+        setUserPosts(prevPosts => 
+          prevPosts.map(post => {
+            if (post._id === contentId) {
+              return {
+                ...post,
+                comments: [...(post.comments || []), result.comment]
+              };
+            }
+            return post;
+          })
+        );
+      } else if (contentType === 'announcement') {
+        setUserAnnouncements(prevAnnouncements => 
+          prevAnnouncements.map(announcement => {
+            if (announcement._id === contentId) {
+              return {
+                ...announcement,
+                comments: [...(announcement.comments || []), result.comment]
+              };
+            }
+            return announcement;
+          })
+        );
+        setRegisteredEvents(prevEvents => 
+          prevEvents.map(announcement => {
+            if (announcement._id === contentId) {
+              return {
+                ...announcement,
+                comments: [...(announcement.comments || []), result.comment]
+              };
+            }
+            return announcement;
+          })
+        );
+      } else if (contentType === 'material') {
+        setUserMaterials(prevMaterials => 
+          prevMaterials.map(material => {
+            if (material._id === contentId) {
+              return {
+                ...material,
+                comments: [...(material.comments || []), result.comment]
+              };
+            }
+            return material;
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Error commenting:', err);
+      alert('Failed to add comment. Please try again.');
+    }
   };
 
   const handleShare = async (contentId, contentType) => {
-    // Implement share functionality
+    // Share functionality is handled within the card components
     console.log('Share:', contentId, contentType);
   };
 
@@ -345,6 +477,16 @@ const Profile = () => {
               >
                 Materials ({profile.materials?.length || 0})
               </button>
+              <button
+                onClick={() => setActiveTab('registered')}
+                className={`flex-1 px-6 py-4 font-medium transition-colors ${
+                  activeTab === 'registered'
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                Registered Events
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -364,6 +506,7 @@ const Profile = () => {
                           <PostCard
                             key={post._id}
                             post={post}
+                            currentUserId={currentUserId}
                             onLike={(id) => handleLike(id, 'post')}
                             onComment={(id, text) => handleComment(id, text, 'post')}
                             onShare={(id) => handleShare(id, 'post')}
@@ -383,7 +526,10 @@ const Profile = () => {
                           <AnnouncementCard
                             key={announcement._id}
                             announcement={announcement}
+                            currentUserId={currentUserId}
                             onLike={(id) => handleLike(id, 'announcement')}
+                            onComment={(id, text) => handleComment(id, text, 'announcement')}
+                            onShare={(id) => handleShare(id, 'post')}
                             onRegister={() => {}}
                           />
                         ))
@@ -401,12 +547,39 @@ const Profile = () => {
                           <MaterialCard
                             key={material._id}
                             material={material}
+                            currentUserId={currentUserId}
                             onLike={(id) => handleLike(id, 'material')}
                             onComment={(id, text) => handleComment(id, text, 'material')}
+                            onShare={(id) => handleShare(id, 'post')}
                           />
                         ))
                       ) : (
                         <p className="text-center text-gray-500 py-8">No materials yet</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Registered Events Tab */}
+                  {activeTab === 'registered' && (
+                    <div>
+                      {registeredEvents.length > 0 ? (
+                        <div className="space-y-4">
+                          {registeredEvents.map(announcement => (
+                            <AnnouncementCard
+                              key={announcement._id}
+                              announcement={announcement}
+                              currentUserId={currentUserId}
+                              onLike={(id) => handleLike(id, 'announcement')}
+                              onComment={(id, text) => handleComment(id, text, 'announcement')}
+                              onRegister={() => {}}
+                              canEdit={false}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-gray-500 py-8">
+                          {isOwnProfile ? 'You have not registered for any events yet' : 'No registered events'}
+                        </p>
                       )}
                     </div>
                   )}
@@ -416,26 +589,23 @@ const Profile = () => {
           </div>
 
           {/* Chat Toggle Button */}
-          {!isOwnProfile && (
-            <button
-              onClick={() => setChatPanelOpen(!chatPanelOpen)}
-              className="fixed bottom-6 right-6 bg-blue-500 text-white p-4 rounded-full shadow-lg hover:bg-blue-600 transition-colors z-40"
-            >
-              💬
-            </button>
-          )}
+          <button
+            onClick={() => setChatPanelOpen(!chatPanelOpen)}
+            className="fixed bottom-6 right-6 bg-blue-500 text-white p-4 rounded-full shadow-lg hover:bg-blue-600 transition-colors z-40"
+            title={isOwnProfile ? "View all chats" : "Chat with user"}
+          >
+            💬
+          </button>
         </div>
       </div>
 
       {/* Right Panel - Chat */}
-      {!isOwnProfile && (
-        <RightPanel
-          isOpen={chatPanelOpen}
-          onToggle={() => setChatPanelOpen(!chatPanelOpen)}
-          userId={currentUserId}
-          targetUserId={profile._id}
-        />
-      )}
+      <RightPanel
+        isOpen={chatPanelOpen}
+        onToggle={() => setChatPanelOpen(!chatPanelOpen)}
+        userId={currentUserId}
+        targetUserId={isOwnProfile ? null : profile._id}
+      />
     </div>
   );
 };

@@ -41,7 +41,7 @@ const Layout = ({ showChat = false }) => {
       <Navbar />
 
       {/* Main Content Area */}
-      <div className="flex min-h-[calc(100vh-4rem)]">
+      <div className="flex min-h-[calc(100vh-4rem)] pt-16">
         {/* Sidebar - Fixed on left (Desktop) / Bottom (Mobile) */}
         <Sidebar 
           isCollapsed={isSidebarCollapsed} 
@@ -52,7 +52,7 @@ const Layout = ({ showChat = false }) => {
         <main 
           id="main-content"
           className={`flex-1 transition-all duration-300 ${
-            isSidebarCollapsed ? 'md:ml-0' : 'md:ml-0'
+            isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
           } ${isChatOpen && showChat ? 'lg:mr-80' : 'mr-0'} pb-20 md:pb-6`}
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">

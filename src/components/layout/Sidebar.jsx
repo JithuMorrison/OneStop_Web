@@ -217,9 +217,10 @@ const Sidebar = ({ isCollapsed: controlledCollapsed, onToggle }) => {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className={`hidden md:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
+        className={`hidden md:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 fixed left-0 top-16 z-30
+          ${isCollapsed ? 'w-20' : 'w-64'}
+          h-[calc(100vh-4rem)] overflow-y-auto scrollbar-hide
+        `}
         aria-label="Main navigation"
       >
         {/* Toggle Button */}
@@ -235,7 +236,7 @@ const Sidebar = ({ isCollapsed: controlledCollapsed, onToggle }) => {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
+        <nav className="flex-1 overflow-y-auto py-4 scrollbar-hide">
           <ul className="space-y-1 px-3" role="list">
             {navigationLinks.map((link) => {
               const Icon = link.icon;

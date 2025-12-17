@@ -292,7 +292,7 @@ const GroupChat = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden -mx-7 -my-5 ">
+    <div className="flex h-[660px] bg-gray-100 overflow-hidden -mx-7 -my-5 ">
       {/* Sidebar - Groups List */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col h-full">
         <div className="p-4 border-b border-gray-200">

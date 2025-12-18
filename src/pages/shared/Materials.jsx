@@ -22,6 +22,8 @@ const Materials = () => {
   const [contacts, setContacts] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState(null);
 
   // Fetch materials on component mount
   useEffect(() => {
@@ -182,6 +184,44 @@ const Materials = () => {
     contact.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleEdit = (material) => {
+    setEditingMaterial(material);
+    setShowEditForm(true);
+  };
+
+  const handleEditSubmit = async (materialData) => {
+    try {
+      await materialService.editMaterial(editingMaterial._id, {
+        title: materialData.title,
+        description: materialData.description,
+        external_link: materialData.external_link
+      });
+      setShowEditForm(false);
+      setEditingMaterial(null);
+      await fetchMaterials();
+      alert('Material updated successfully!');
+    } catch (err) {
+      console.error('Error updating material:', err);
+      throw err;
+    }
+  };
+
+  const handleEditCancel = () => {
+    setShowEditForm(false);
+    setEditingMaterial(null);
+  };
+
+  const handleDelete = async (materialId) => {
+    try {
+      await materialService.deleteMaterial(materialId);
+      await fetchMaterials();
+      alert('Material deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting material:', err);
+      alert(err.error || 'Failed to delete material');
+    }
+  };
+
   if (loading && materials.length === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -236,6 +276,18 @@ const Materials = () => {
           </div>
         )}
 
+        {/* Edit Material Form */}
+        {showEditForm && editingMaterial && (
+          <div className="mb-6">
+            <MaterialForm
+              initialData={editingMaterial}
+              onSubmit={handleEditSubmit}
+              onCancel={handleEditCancel}
+              isSubmitting={isSubmitting}
+            />
+          </div>
+        )}
+
         {/* Materials List */}
         {materials.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
@@ -252,6 +304,8 @@ const Materials = () => {
                 onLike={handleLike}
                 onComment={handleComment}
                 onShare={handleShareClick}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
               />
             ))}
           </div>

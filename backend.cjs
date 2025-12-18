@@ -1167,6 +1167,90 @@ app.get('/api/chats', authenticateToken, async (req, res) => {
   }
 });
 
+// Edit message
+app.put('/api/chat/:chatId/message/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { chatId, messageId } = req.params;
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    // Find the chat
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    // Check if user is participant
+    if (!chat.participants.includes(req.userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Find the message
+    const message = chat.messages.id(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if user is the sender
+    if (message.sender.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only edit your own messages' });
+    }
+
+    // Update the message
+    message.content = content.trim();
+    message.edited = true;
+    message.editedAt = new Date();
+
+    await chat.save();
+
+    res.json({ message: 'Message updated successfully', updatedMessage: message });
+  } catch (err) {
+    console.error('Edit message error:', err);
+    res.status(500).json({ error: 'Failed to edit message' });
+  }
+});
+
+// Delete message
+app.delete('/api/chat/:chatId/message/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { chatId, messageId } = req.params;
+
+    // Find the chat
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+      return res.status(404).json({ error: 'Chat not found' });
+    }
+
+    // Check if user is participant
+    if (!chat.participants.includes(req.userId)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Find the message
+    const message = chat.messages.id(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if user is the sender
+    if (message.sender.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    // Remove the message
+    chat.messages.pull(messageId);
+    await chat.save();
+
+    res.json({ message: 'Message deleted successfully' });
+  } catch (err) {
+    console.error('Delete message error:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
 // ----------------------------------------------------- Forgot Password -----------------------------------------------------------------
 
 const sendEmail = async (mailOptions) => {
@@ -1783,6 +1867,119 @@ app.post('/api/announcements/:id/badges', authenticateToken, async (req, res) =>
   }
 });
 
+// Edit announcement
+app.put('/api/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const announcementId = req.params.id;
+    const { title, description, category, hashtag, registration_enabled, registration_fields, start_date, end_date } = req.body;
+
+    // Find the announcement
+    const announcement = await Announcement.findById(announcementId);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    // Check if user is the creator
+    if (announcement.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only edit your own announcements' });
+    }
+
+    // Update the announcement
+    const updatedAnnouncement = await Announcement.findByIdAndUpdate(
+      announcementId,
+      {
+        title: title?.trim(),
+        description: description?.trim(),
+        category: category || 'general',
+        hashtag: hashtag?.trim(),
+        registration_enabled: registration_enabled || false,
+        registration_fields: registration_fields || [],
+        start_date: start_date ? new Date(start_date) : announcement.start_date,
+        end_date: end_date ? new Date(end_date) : announcement.end_date,
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('created_by', 'name email role department');
+
+    // Update corresponding event if it exists
+    try {
+      const existingEvent = await Event.findOne({
+        source_type: 'announcement',
+        source_id: announcementId
+      });
+
+      if (existingEvent) {
+        await Event.findByIdAndUpdate(existingEvent._id, {
+          name: title?.trim() || existingEvent.name,
+          type: category || existingEvent.type,
+          start_date: start_date ? new Date(start_date) : existingEvent.start_date,
+          end_date: end_date ? new Date(end_date) : existingEvent.end_date,
+          edited: true,
+          editedAt: new Date()
+        });
+        console.log('Updated corresponding event for announcement:', announcementId);
+      }
+    } catch (eventErr) {
+      console.error('Event update error:', eventErr);
+      // Don't fail the announcement update if event update fails
+    }
+
+    res.json(updatedAnnouncement);
+  } catch (err) {
+    console.error('Edit announcement error:', err);
+    res.status(500).json({ error: 'Failed to edit announcement' });
+  }
+});
+
+// Delete announcement
+app.delete('/api/announcements/:id', authenticateToken, async (req, res) => {
+  try {
+    const announcementId = req.params.id;
+
+    // Find the announcement
+    const announcement = await Announcement.findById(announcementId);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+
+    // Check if user is the creator
+    if (announcement.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own announcements' });
+    }
+
+    // Remove announcement ID from user's announcements array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $pull: { announcements: new mongoose.Types.ObjectId(announcementId) } }
+    );
+
+    // Delete corresponding event if it exists
+    try {
+      const existingEvent = await Event.findOne({
+        source_type: 'announcement',
+        source_id: announcementId
+      });
+
+      if (existingEvent) {
+        await Event.findByIdAndDelete(existingEvent._id);
+        console.log('Deleted corresponding event for announcement:', announcementId);
+      }
+    } catch (eventErr) {
+      console.error('Event deletion error:', eventErr);
+      // Don't fail the announcement deletion if event deletion fails
+    }
+
+    // Delete the announcement
+    await Announcement.findByIdAndDelete(announcementId);
+
+    res.json({ message: 'Announcement deleted successfully' });
+  } catch (err) {
+    console.error('Delete announcement error:', err);
+    res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+
 // ============================================ POST ROUTES ============================================
 
 // Create post
@@ -1988,6 +2185,76 @@ app.get('/api/posts/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Fetch post error:', err);
     res.status(500).json({ error: 'Failed to fetch post' });
+  }
+});
+
+// Edit post
+app.put('/api/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const { title, description, hashtags, visibility } = req.body;
+
+    // Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check if user is the creator
+    if (post.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only edit your own posts' });
+    }
+
+    // Update the post
+    const updatedPost = await Post.findByIdAndUpdate(
+      postId,
+      {
+        title: title?.trim(),
+        description: description?.trim(),
+        hashtags: hashtags || [],
+        visibility: visibility || 'everyone',
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('created_by', 'name email role department');
+
+    res.json(updatedPost);
+  } catch (err) {
+    console.error('Edit post error:', err);
+    res.status(500).json({ error: 'Failed to edit post' });
+  }
+});
+
+// Delete post
+app.delete('/api/posts/:id', authenticateToken, async (req, res) => {
+  try {
+    const postId = req.params.id;
+
+    // Find the post
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check if user is the creator
+    if (post.created_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own posts' });
+    }
+
+    // Remove post ID from user's posts array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $pull: { posts: new mongoose.Types.ObjectId(postId) } }
+    );
+
+    // Delete the post
+    await Post.findByIdAndDelete(postId);
+
+    res.json({ message: 'Post deleted successfully' });
+  } catch (err) {
+    console.error('Delete post error:', err);
+    res.status(500).json({ error: 'Failed to delete post' });
   }
 });
 
@@ -2293,6 +2560,75 @@ app.post('/api/:contentType/:id/comment', authenticateToken, async (req, res) =>
   } catch (err) {
     console.error('Add comment error:', err);
     res.status(500).json({ error: 'Failed to add comment' });
+  }
+});
+
+// Edit material
+app.put('/api/materials/:id', authenticateToken, async (req, res) => {
+  try {
+    const materialId = req.params.id;
+    const { title, description, external_link } = req.body;
+
+    // Find the material
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    // Check if user is the uploader
+    if (material.uploaded_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only edit your own materials' });
+    }
+
+    // Update the material
+    const updatedMaterial = await Material.findByIdAndUpdate(
+      materialId,
+      {
+        title: title?.trim(),
+        description: description?.trim(),
+        external_link: external_link?.trim(),
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('uploaded_by', 'name email role username');
+
+    res.json(updatedMaterial);
+  } catch (err) {
+    console.error('Edit material error:', err);
+    res.status(500).json({ error: 'Failed to edit material' });
+  }
+});
+
+// Delete material
+app.delete('/api/materials/:id', authenticateToken, async (req, res) => {
+  try {
+    const materialId = req.params.id;
+
+    // Find the material
+    const material = await Material.findById(materialId);
+    if (!material) {
+      return res.status(404).json({ error: 'Material not found' });
+    }
+
+    // Check if user is the uploader
+    if (material.uploaded_by.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own materials' });
+    }
+
+    // Remove material ID from user's materials array
+    await User.findByIdAndUpdate(
+      req.userId,
+      { $pull: { materials: new mongoose.Types.ObjectId(materialId) } }
+    );
+
+    // Delete the material
+    await Material.findByIdAndDelete(materialId);
+
+    res.json({ message: 'Material deleted successfully' });
+  } catch (err) {
+    console.error('Delete material error:', err);
+    res.status(500).json({ error: 'Failed to delete material' });
   }
 });
 
@@ -2767,6 +3103,120 @@ app.get('/api/tools', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Fetch tools error:', err);
     res.status(500).json({ error: 'Failed to fetch tools' });
+  }
+});
+
+// Edit portal (admin only)
+app.put('/api/portals/:id', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const portalId = req.params.id;
+    const { title, description, external_link } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !external_link) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Find and update the portal
+    const portal = await Portal.findById(portalId);
+    if (!portal) {
+      return res.status(404).json({ error: 'Portal not found' });
+    }
+
+    const updatedPortal = await Portal.findByIdAndUpdate(
+      portalId,
+      {
+        title: title.trim(),
+        description: description.trim(),
+        external_link: external_link.trim(),
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('created_by', 'name email role');
+
+    res.json(updatedPortal);
+  } catch (err) {
+    console.error('Edit portal error:', err);
+    res.status(500).json({ error: 'Failed to edit portal' });
+  }
+});
+
+// Delete portal (admin only)
+app.delete('/api/portals/:id', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const portalId = req.params.id;
+
+    // Find the portal
+    const portal = await Portal.findById(portalId);
+    if (!portal) {
+      return res.status(404).json({ error: 'Portal not found' });
+    }
+
+    // Delete the portal
+    await Portal.findByIdAndDelete(portalId);
+
+    res.json({ message: 'Portal deleted successfully' });
+  } catch (err) {
+    console.error('Delete portal error:', err);
+    res.status(500).json({ error: 'Failed to delete portal' });
+  }
+});
+
+// Edit tool (admin only)
+app.put('/api/tools/:id', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const toolId = req.params.id;
+    const { title, description, external_link } = req.body;
+
+    // Validate required fields
+    if (!title || !description || !external_link) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Find and update the tool
+    const tool = await Tool.findById(toolId);
+    if (!tool) {
+      return res.status(404).json({ error: 'Tool not found' });
+    }
+
+    const updatedTool = await Tool.findByIdAndUpdate(
+      toolId,
+      {
+        title: title.trim(),
+        description: description.trim(),
+        external_link: external_link.trim(),
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('created_by', 'name email role');
+
+    res.json(updatedTool);
+  } catch (err) {
+    console.error('Edit tool error:', err);
+    res.status(500).json({ error: 'Failed to edit tool' });
+  }
+});
+
+// Delete tool (admin only)
+app.delete('/api/tools/:id', authenticateToken, adminOnlyMiddleware, async (req, res) => {
+  try {
+    const toolId = req.params.id;
+
+    // Find the tool
+    const tool = await Tool.findById(toolId);
+    if (!tool) {
+      return res.status(404).json({ error: 'Tool not found' });
+    }
+
+    // Delete the tool
+    await Tool.findByIdAndDelete(toolId);
+
+    res.json({ message: 'Tool deleted successfully' });
+  } catch (err) {
+    console.error('Delete tool error:', err);
+    res.status(500).json({ error: 'Failed to delete tool' });
   }
 });
 
@@ -3399,6 +3849,93 @@ app.post('/api/group-chats/:groupId/messages', authenticateToken, async (req, re
   } catch (err) {
     console.error('Send group message error:', err);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// Edit message in group
+app.put('/api/group-chats/:groupId/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId, messageId } = req.params;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Find the message
+    const existingMessage = await GroupMessage.findById(messageId);
+    if (!existingMessage) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if message belongs to this group
+    if (existingMessage.group_id.toString() !== groupId) {
+      return res.status(400).json({ error: 'Message does not belong to this group' });
+    }
+
+    // Check if user is the sender of the message
+    if (existingMessage.sender.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only edit your own messages' });
+    }
+
+    // Update the message
+    const updatedMessage = await GroupMessage.findByIdAndUpdate(
+      messageId,
+      { 
+        message: message.trim(),
+        edited: true,
+        editedAt: new Date()
+      },
+      { new: true }
+    ).populate('sender', 'name email');
+
+    res.json(updatedMessage);
+  } catch (err) {
+    console.error('Edit group message error:', err);
+    res.status(500).json({ error: 'Failed to edit message' });
+  }
+});
+
+// Delete message from group
+app.delete('/api/group-chats/:groupId/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { groupId, messageId } = req.params;
+
+    // Check if group exists
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+
+    // Find the message
+    const message = await GroupMessage.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Check if message belongs to this group
+    if (message.group_id.toString() !== groupId) {
+      return res.status(400).json({ error: 'Message does not belong to this group' });
+    }
+
+    // Check if user is the sender of the message
+    if (message.sender.toString() !== req.userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    // Delete the message
+    await GroupMessage.findByIdAndDelete(messageId);
+
+    res.json({ message: 'Message deleted successfully' });
+  } catch (err) {
+    console.error('Delete group message error:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
   }
 });
 

@@ -238,6 +238,65 @@ export const postService = {
       console.error('Error fetching post:', error);
       throw error.response?.data || error;
     }
+  },
+
+  /**
+   * Edit post
+   * @param {string} postId - Post ID
+   * @param {Object} data - Updated post data
+   * @returns {Promise<Object>} - Updated post
+   */
+  editPost: async (postId, data) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.put(
+        `${API_URL}/posts/${postId}`,
+        data,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Error editing post:', error);
+      throw error.response?.data || error;
+    }
+  },
+
+  /**
+   * Delete post
+   * @param {string} postId - Post ID
+   * @returns {Promise<Object>} - Delete result
+   */
+  deletePost: async (postId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.delete(
+        `${API_URL}/posts/${postId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      throw error.response?.data || error;
+    }
   }
 };
 

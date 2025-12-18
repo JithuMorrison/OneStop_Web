@@ -24,6 +24,8 @@ const Posts = () => {
   const [contacts, setContacts] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingPost, setEditingPost] = useState(null);
 
   // Fetch posts on component mount
   useEffect(() => {
@@ -199,6 +201,45 @@ const Posts = () => {
     setSelectedHashtags([]);
   };
 
+  const handleEdit = (post) => {
+    setEditingPost(post);
+    setShowEditForm(true);
+  };
+
+  const handleEditSubmit = async (postData) => {
+    try {
+      await postService.editPost(editingPost._id, {
+        title: postData.title,
+        description: postData.description,
+        visibility: postData.visibility,
+        hashtags: postData.hashtags
+      });
+      setShowEditForm(false);
+      setEditingPost(null);
+      await fetchPosts();
+      alert('Post updated successfully!');
+    } catch (err) {
+      console.error('Error updating post:', err);
+      throw err;
+    }
+  };
+
+  const handleEditCancel = () => {
+    setShowEditForm(false);
+    setEditingPost(null);
+  };
+
+  const handleDelete = async (postId) => {
+    try {
+      await postService.deletePost(postId);
+      await fetchPosts();
+      alert('Post deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      alert(err.error || 'Failed to delete post');
+    }
+  };
+
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -251,6 +292,18 @@ const Posts = () => {
             <PostForm
               onSubmit={handleCreatePost}
               onCancel={() => setShowCreateForm(false)}
+              isSubmitting={isSubmitting}
+            />
+          </div>
+        )}
+
+        {/* Edit Post Form */}
+        {showEditForm && editingPost && (
+          <div className="mb-6">
+            <PostForm
+              initialData={editingPost}
+              onSubmit={handleEditSubmit}
+              onCancel={handleEditCancel}
               isSubmitting={isSubmitting}
             />
           </div>
@@ -312,6 +365,8 @@ const Posts = () => {
                 onLike={handleLike}
                 onComment={handleComment}
                 onShare={handleShareClick}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
               />
             ))}
           </div>

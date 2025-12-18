@@ -201,6 +201,65 @@ export const materialService = {
       console.error('Error fetching material:', error);
       throw error.response?.data || error;
     }
+  },
+
+  /**
+   * Edit material
+   * @param {string} materialId - Material ID
+   * @param {Object} data - Updated material data
+   * @returns {Promise<Object>} - Updated material
+   */
+  editMaterial: async (materialId, data) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.put(
+        `${API_URL}/materials/${materialId}`,
+        data,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Error editing material:', error);
+      throw error.response?.data || error;
+    }
+  },
+
+  /**
+   * Delete material
+   * @param {string} materialId - Material ID
+   * @returns {Promise<Object>} - Delete result
+   */
+  deleteMaterial: async (materialId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await axios.delete(
+        `${API_URL}/materials/${materialId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting material:', error);
+      throw error.response?.data || error;
+    }
   }
 };
 

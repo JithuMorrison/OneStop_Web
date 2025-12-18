@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/UserContext.jsx';
-import { FaPlus, FaSearch, FaTimes, FaUsers, FaGlobeAmericas, FaPaperPlane, FaInfinity } from 'react-icons/fa';
+import { FaPlus, FaSearch, FaTimes, FaUsers, FaGlobeAmericas, FaPaperPlane, FaInfinity, FaTrash, FaEllipsisV, FaEdit, FaCheck } from 'react-icons/fa';
 import axios from 'axios';
 
 const API_URL = 'http://localhost:5000/api';
@@ -23,6 +23,9 @@ const GroupChat = () => {
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const [showMessageOptions, setShowMessageOptions] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
 
   // Create group form
   const [newGroup, setNewGroup] = useState({
@@ -253,6 +256,62 @@ const GroupChat = () => {
     }
   };
 
+  const handleDeleteMessage = async (messageId) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(
+        `${API_URL}/group-chats/${selectedGroup._id}/messages/${messageId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Remove message from local state
+      setMessages(messages.filter(msg => msg._id !== messageId));
+      setShowMessageOptions(null);
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      alert(err.response?.data?.error || 'Failed to delete message');
+    }
+  };
+
+  const handleEditMessage = (message) => {
+    setEditingMessage(message._id);
+    setEditText(message.message);
+    setShowMessageOptions(null);
+  };
+
+  const handleSaveEdit = async (messageId) => {
+    if (!editText.trim()) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_URL}/group-chats/${selectedGroup._id}/messages/${messageId}`,
+        { message: editText.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Update message in local state
+      setMessages(messages.map(msg => 
+        msg._id === messageId 
+          ? { ...msg, message: editText.trim(), edited: true }
+          : msg
+      ));
+      
+      setEditingMessage(null);
+      setEditText('');
+    } catch (err) {
+      console.error('Error editing message:', err);
+      alert(err.response?.data?.error || 'Failed to edit message');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditText('');
+  };
+
   const formatTime = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', {
@@ -402,6 +461,12 @@ const GroupChat = () => {
               ref={messagesContainerRef}
               className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50" 
               onScroll={handleScroll}
+              onClick={() => {
+                setShowMessageOptions(null);
+                if (editingMessage) {
+                  handleCancelEdit();
+                }
+              }} // Close options when clicking outside
             >
               {messages.map((msg, index) => {
                 const showDate = index === 0 || 
@@ -418,23 +483,121 @@ const GroupChat = () => {
                       </div>
                     )}
                     <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-md ${isOwnMessage ? 'order-2' : 'order-1'}`}>
+                      <div className={`max-w-md ${isOwnMessage ? 'order-2' : 'order-1'} relative group`}>
                         {!isOwnMessage && (
                           <p className="text-xs text-gray-600 mb-1 ml-2">
                             {msg.sender?.name || 'Unknown User'}
                           </p>
                         )}
-                        <div className={`rounded-lg p-3 ${
+                        <div className={`rounded-lg p-3 relative ${
                           isOwnMessage 
                             ? 'bg-blue-600 text-white' 
                             : 'bg-white border border-gray-200 text-gray-900'
                         }`}>
-                          <p className="break-words">{msg.message}</p>
-                          <p className={`text-xs mt-1 ${
-                            isOwnMessage ? 'text-blue-100' : 'text-gray-500'
-                          }`}>
-                            {formatTime(msg.createdAt)}
-                          </p>
+                          {editingMessage === msg._id ? (
+                            <div className="pr-6">
+                              <input
+                                type="text"
+                                value={editText}
+                                onChange={(e) => setEditText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSaveEdit(msg._id);
+                                  } else if (e.key === 'Escape') {
+                                    handleCancelEdit();
+                                  }
+                                }}
+                                className={`w-full px-2 py-1 rounded border-none outline-none resize-none ${
+                                  isOwnMessage 
+                                    ? 'bg-blue-500 text-white placeholder-blue-200' 
+                                    : 'bg-gray-100 text-gray-900 placeholder-gray-500'
+                                }`}
+                                placeholder="Edit message..."
+                                autoFocus
+                              />
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => handleSaveEdit(msg._id)}
+                                  className={`px-2 py-1 rounded text-xs ${
+                                    isOwnMessage 
+                                      ? 'bg-blue-500 hover:bg-blue-400 text-white' 
+                                      : 'bg-green-500 hover:bg-green-600 text-white'
+                                  }`}
+                                >
+                                  <FaCheck size={10} />
+                                </button>
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className={`px-2 py-1 rounded text-xs ${
+                                    isOwnMessage 
+                                      ? 'bg-blue-500 hover:bg-blue-400 text-white' 
+                                      : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                  }`}
+                                >
+                                  <FaTimes size={10} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="break-words pr-6">
+                                {msg.message}
+                                {msg.edited && (
+                                  <span className={`text-xs ml-2 ${
+                                    isOwnMessage ? 'text-blue-200' : 'text-gray-400'
+                                  }`}>
+                                    (edited)
+                                  </span>
+                                )}
+                              </p>
+                              <p className={`text-xs mt-1 ${
+                                isOwnMessage ? 'text-blue-100' : 'text-gray-500'
+                              }`}>
+                                {formatTime(msg.createdAt)}
+                              </p>
+                            </>
+                          )}
+                          
+                          {/* Message Options Button - Only show for own messages */}
+                          {isOwnMessage && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMessageOptions(showMessageOptions === msg._id ? null : msg._id);
+                              }}
+                              className={`absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                                isOwnMessage ? 'text-blue-100 hover:text-white hover:bg-blue-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              <FaEllipsisV size={12} />
+                            </button>
+                          )}
+
+                          {/* Message Options Dropdown */}
+                          {showMessageOptions === msg._id && isOwnMessage && (
+                            <div className="absolute top-8 right-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditMessage(msg);
+                                }}
+                                className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                              >
+                                <FaEdit size={12} />
+                                Edit
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteMessage(msg._id);
+                                }}
+                                className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                              >
+                                <FaTrash size={12} />
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

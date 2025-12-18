@@ -19,6 +19,8 @@ const Announcements = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
 
   const categories = [
     'All',
@@ -144,6 +146,40 @@ const Announcements = () => {
     console.log('Share announcement:', announcementId, type);
   };
 
+  const handleEdit = (announcement) => {
+    setEditingAnnouncement(announcement);
+    setShowEditForm(true);
+  };
+
+  const handleEditSubmit = async (formData, imageFile, imageUrl) => {
+    try {
+      await announcementService.editAnnouncement(editingAnnouncement._id, formData);
+      setShowEditForm(false);
+      setEditingAnnouncement(null);
+      await loadAnnouncements();
+      alert('Announcement updated successfully!');
+    } catch (err) {
+      console.error('Error updating announcement:', err);
+      throw err;
+    }
+  };
+
+  const handleEditCancel = () => {
+    setShowEditForm(false);
+    setEditingAnnouncement(null);
+  };
+
+  const handleDelete = async (announcementId) => {
+    try {
+      await announcementService.deleteAnnouncement(announcementId);
+      await loadAnnouncements();
+      alert('Announcement deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting announcement:', err);
+      alert(err.message || 'Failed to delete announcement');
+    }
+  };
+
   const handleRegister = (announcementId) => {
     const announcement = announcements.find(a => a._id === announcementId);
     if (announcement) {
@@ -260,6 +296,17 @@ const Announcements = () => {
           </div>
         )}
 
+        {/* Edit Form */}
+        {showEditForm && editingAnnouncement && (
+          <div className="mb-8">
+            <AnnouncementForm
+              initialData={editingAnnouncement}
+              onSubmit={handleEditSubmit}
+              onCancel={handleEditCancel}
+            />
+          </div>
+        )}
+
         {/* Announcements Grid */}
         {filteredAnnouncements.length === 0 ? (
           <div className="text-center py-12">
@@ -279,6 +326,8 @@ const Announcements = () => {
                 onComment={handleComment}
                 onRegister={handleRegister}
                 onShare={handleShare}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
                 currentUserId={currentUser?._id}
               />
             ))}

@@ -10,19 +10,20 @@ const API_URL = 'http://localhost:5000/api';
 
 export const announcementService = {
   /**
-   * Create announcement with image upload to Supabase Storage
+   * Create announcement with image upload to Supabase Storage or URL
    * @param {Object} data - Announcement data
-   * @param {File} imageFile - Image file to upload
+   * @param {File} imageFile - Image file to upload (optional)
+   * @param {string} imageUrl - Image URL (optional)
    * @returns {Promise<Object>} Created announcement
    */
-  createAnnouncement: async (data, imageFile) => {
+  createAnnouncement: async (data, imageFile, imageUrl) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      let imageUrl = data.image;
+      let finalImageUrl = imageUrl || data.image;
 
       // Upload image to Supabase Storage if file is provided
       if (imageFile && imageFile instanceof File) {
@@ -43,7 +44,7 @@ export const announcementService = {
           .from('jithu')
           .getPublicUrl(filePath);
 
-        imageUrl = publicUrl;
+        finalImageUrl = publicUrl;
       }
 
       // Create announcement via backend API
@@ -55,7 +56,7 @@ export const announcementService = {
         },
         body: JSON.stringify({
           ...data,
-          image: imageUrl
+          image: finalImageUrl
         })
       });
 
@@ -263,6 +264,83 @@ export const announcementService = {
       return await response.json();
     } catch (error) {
       console.error('Issue badges error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Edit announcement
+   * @param {string} announcementId - Announcement ID
+   * @param {Object} data - Updated announcement data
+   * @returns {Promise<Object>} Updated announcement
+   */
+  editAnnouncement: async (announcementId, data) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      // Include all fields that might affect the corresponding event
+      const updateData = {
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        hashtag: data.hashtag,
+        registration_enabled: data.registration_enabled,
+        registration_fields: data.registration_fields,
+        start_date: data.start_date,
+        end_date: data.end_date
+      };
+
+      const response = await fetch(`${API_URL}/announcements/${announcementId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to edit announcement');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Edit announcement error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete announcement
+   * @param {string} announcementId - Announcement ID
+   * @returns {Promise<Object>} Delete result
+   */
+  deleteAnnouncement: async (announcementId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch(`${API_URL}/announcements/${announcementId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete announcement');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Delete announcement error:', error);
       throw error;
     }
   },

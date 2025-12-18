@@ -271,6 +271,46 @@ const Profile = () => {
     console.log('Share:', contentId, contentType);
   };
 
+  const handleEdit = (content, contentType) => {
+    // For now, we'll show an alert since Profile page doesn't have inline edit forms
+    // In a real implementation, you might want to redirect to the respective edit pages
+    // or implement modal-based editing
+    alert(`Edit functionality for "${content.title}" - This would redirect to the ${contentType} edit page or open a modal`);
+    console.log('Edit:', content, contentType);
+    
+    // Example: You could redirect to the respective pages for editing
+    // if (contentType === 'post') {
+    //   navigate('/posts?edit=' + content._id);
+    // } else if (contentType === 'announcement') {
+    //   navigate('/announcements?edit=' + content._id);
+    // } else if (contentType === 'material') {
+    //   navigate('/materials?edit=' + content._id);
+    // }
+  };
+
+  const handleDelete = async (contentId, contentType) => {
+    try {
+      if (contentType === 'post') {
+        await postService.deletePost(contentId);
+        setUserPosts(prevPosts => prevPosts.filter(post => post._id !== contentId));
+      } else if (contentType === 'announcement') {
+        await announcementService.deleteAnnouncement(contentId);
+        setUserAnnouncements(prevAnnouncements => 
+          prevAnnouncements.filter(announcement => announcement._id !== contentId)
+        );
+      } else if (contentType === 'material') {
+        await materialService.deleteMaterial(contentId);
+        setUserMaterials(prevMaterials => 
+          prevMaterials.filter(material => material._id !== contentId)
+        );
+      }
+      alert(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} deleted successfully!`);
+    } catch (err) {
+      console.error(`Error deleting ${contentType}:`, err);
+      alert(err.error || `Failed to delete ${contentType}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -510,6 +550,8 @@ const Profile = () => {
                             onLike={(id) => handleLike(id, 'post')}
                             onComment={(id, text) => handleComment(id, text, 'post')}
                             onShare={(id) => handleShare(id, 'post')}
+                            onEdit={(post) => handleEdit(post, 'post')}
+                            onDelete={(id) => handleDelete(id, 'post')}
                           />
                         ))
                       ) : (
@@ -531,6 +573,8 @@ const Profile = () => {
                             onComment={(id, text) => handleComment(id, text, 'announcement')}
                             onShare={(id) => handleShare(id, 'post')}
                             onRegister={() => {}}
+                            onEdit={(announcement) => handleEdit(announcement, 'announcement')}
+                            onDelete={(id) => handleDelete(id, 'announcement')}
                           />
                         ))
                       ) : (
@@ -551,6 +595,8 @@ const Profile = () => {
                             onLike={(id) => handleLike(id, 'material')}
                             onComment={(id, text) => handleComment(id, text, 'material')}
                             onShare={(id) => handleShare(id, 'post')}
+                            onEdit={(material) => handleEdit(material, 'material')}
+                            onDelete={(id) => handleDelete(id, 'material')}
                           />
                         ))
                       ) : (
@@ -573,6 +619,8 @@ const Profile = () => {
                               onComment={(id, text) => handleComment(id, text, 'announcement')}
                               onRegister={() => {}}
                               canEdit={false}
+                              onEdit={(announcement) => handleEdit(announcement, 'announcement')}
+                              onDelete={(id) => handleDelete(id, 'announcement')}
                             />
                           ))}
                         </div>

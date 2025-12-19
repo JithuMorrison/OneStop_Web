@@ -177,9 +177,63 @@ export const pollChatThreads = (callback, interval = 5000) => {
   return () => clearInterval(intervalId);
 };
 
+/**
+ * Edit a message in a chat thread
+ * @param {string} chatId - ID of the chat thread
+ * @param {string} messageId - ID of the message to edit
+ * @param {string} content - New message content
+ * @returns {Promise<Object>} Updated message object
+ */
+export const editMessage = async (chatId, messageId, content) => {
+  try {
+    const response = await fetch(`${API_URL}/chat/${chatId}/message/${messageId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ content })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to edit message');
+    }
+
+    const message = await response.json();
+    return message;
+  } catch (error) {
+    console.error('Error editing message:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a message from a chat thread
+ * @param {string} chatId - ID of the chat thread
+ * @param {string} messageId - ID of the message to delete
+ * @returns {Promise<Object>} Success response
+ */
+export const deleteMessage = async (chatId, messageId) => {
+  try {
+    const response = await fetch(`${API_URL}/chat/${chatId}/message/${messageId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to delete message');
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    throw error;
+  }
+};
+
 export default {
   createChatThread,
   sendMessage,
+  editMessage,
+  deleteMessage,
   getChatMessages,
   getChatThreads,
   pollMessages,

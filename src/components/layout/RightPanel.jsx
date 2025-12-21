@@ -4,7 +4,11 @@ import {
   FaSearch, 
   FaUser, 
   FaPaperPlane,
-  FaChevronLeft
+  FaChevronLeft,
+  FaEllipsisV,
+  FaEdit,
+  FaTrash,
+  FaCheck
 } from 'react-icons/fa';
 import { useAuth } from '../../context/UserContext.jsx';
 import * as chatService from '../../services/chatService.jsx';
@@ -34,6 +38,9 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   const messagesEndRef = useRef(null);
   const pollCleanupRef = useRef(null);
   const threadPollCleanupRef = useRef(null);
+  const [showMessageOptions, setShowMessageOptions] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [editText, setEditText] = useState('');
 
   /**
    * Auto-scroll to bottom when messages change
@@ -445,6 +452,65 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
   };
 
   /**
+   * Edit a message
+   */
+  const handleEditMessage = (message) => {
+    setEditingMessage(message.id);
+    setEditText(message.content);
+    setShowMessageOptions(null);
+  };
+
+  /**
+   * Save edited message
+   */
+  const handleSaveEdit = async (messageId) => {
+    if (!editText.trim()) return;
+
+    try {
+      await chatService.editMessage(selectedThread._id, messageId, editText.trim());
+      
+      // Update message in local state
+      setMessages(messages.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, content: editText.trim(), edited: true }
+          : msg
+      ));
+      
+      setEditingMessage(null);
+      setEditText('');
+    } catch (error) {
+      console.error('Error editing message:', error);
+      alert('Failed to edit message');
+    }
+  };
+
+  /**
+   * Cancel editing
+   */
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditText('');
+  };
+
+  /**
+   * Delete a message
+   */
+  const handleDeleteMessage = async (messageId) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+
+    try {
+      await chatService.deleteMessage(selectedThread._id, messageId);
+      
+      // Remove message from local state
+      setMessages(messages.filter(msg => msg.id !== messageId));
+      setShowMessageOptions(null);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message');
+    }
+  };
+
+  /**
    * Format timestamp for display
    * @param {Date} date - Date to format
    * @returns {string} - Formatted time string
@@ -582,23 +648,121 @@ const RightPanel = ({ isOpen, onToggle, userId, targetUserId }) => {
                   return (
                     <div
                       key={message.id}
-                      className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
+                      className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}
+                      onClick={() => setShowMessageOptions(null)}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                        className={`max-w-[70%] rounded-lg px-4 py-2 relative ${
                           isSent
                             ? 'bg-blue-500 text-white'
                             : 'bg-gray-100 text-gray-800'
                         }`}
                       >
-                        <p className="text-sm break-words">{message.content}</p>
-                        <p
-                          className={`text-xs mt-1 ${
-                            isSent ? 'text-blue-100' : 'text-gray-500'
-                          }`}
-                        >
-                          {formatTime(message.createdAt)}
-                        </p>
+                        {editingMessage === message.id ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSaveEdit(message.id);
+                                } else if (e.key === 'Escape') {
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className={`w-full px-2 py-1 rounded text-sm ${
+                                isSent 
+                                  ? 'bg-blue-400 text-white placeholder-blue-200' 
+                                  : 'bg-white text-gray-900'
+                              }`}
+                              autoFocus
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSaveEdit(message.id)}
+                                className={`px-2 py-1 rounded text-xs ${
+                                  isSent 
+                                    ? 'bg-blue-400 hover:bg-blue-300 text-white' 
+                                    : 'bg-green-500 hover:bg-green-600 text-white'
+                                }`}
+                              >
+                                <FaCheck size={10} />
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className={`px-2 py-1 rounded text-xs ${
+                                  isSent 
+                                    ? 'bg-blue-400 hover:bg-blue-300 text-white' 
+                                    : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                }`}
+                              >
+                                <FaTimes size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm break-words pr-6">
+                              {message.content}
+                              {message.edited && (
+                                <span className={`text-xs ml-2 ${
+                                  isSent ? 'text-blue-200' : 'text-gray-400'
+                                }`}>
+                                  (edited)
+                                </span>
+                              )}
+                            </p>
+                            <p
+                              className={`text-xs mt-1 ${
+                                isSent ? 'text-blue-100' : 'text-gray-500'
+                              }`}
+                            >
+                              {formatTime(message.createdAt)}
+                            </p>
+                            
+                            {/* Message Options Button - Only show for own messages */}
+                            {isSent && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowMessageOptions(showMessageOptions === message.id ? null : message.id);
+                                }}
+                                className={`absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                                  isSent ? 'text-blue-100 hover:text-white hover:bg-blue-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                <FaEllipsisV size={10} />
+                              </button>
+                            )}
+
+                            {/* Message Options Dropdown */}
+                            {showMessageOptions === message.id && isSent && (
+                              <div className="absolute top-8 right-2 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[100px]">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditMessage(message);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-xs"
+                                >
+                                  <FaEdit size={10} />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteMessage(message.id);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-xs border-t border-gray-100"
+                                >
+                                  <FaTrash size={10} />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   );

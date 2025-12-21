@@ -81,10 +81,10 @@ const Navbar = () => {
             <Link 
               to={getDashboardRoute()} 
               className="text-xl sm:text-2xl font-bold text-blue-600 hover:text-blue-700 active:text-blue-800 transition-colors touch-manipulation"
-              aria-label="SSN Connect Home"
+              aria-label="Onestop Home"
             >
-              <span className="hidden sm:inline">SSN Connect</span>
-              <span className="sm:hidden">SSN</span>
+              <span className="hidden sm:inline">Onestop</span>
+              <span className="sm:hidden">Osto</span>
             </Link>
           </div>
 
@@ -139,15 +139,6 @@ const Navbar = () => {
                         className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md transition-colors touch-manipulation"
                       >
                         View Profile
-                      </button>
-                      <button
-                        onClick={() => {
-                          navigate('/settings');
-                          setShowProfileMenu(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md transition-colors touch-manipulation"
-                      >
-                        Settings
                       </button>
                       <hr className="my-2 border-gray-200" />
                       <button

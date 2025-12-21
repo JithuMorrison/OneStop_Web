@@ -1,6 +1,6 @@
 // src/components/shared/MaterialCard.jsx
 import React, { useState } from 'react';
-import { FaHeart, FaRegHeart, FaComment, FaShare, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaComment, FaShare, FaFileAlt, FaExternalLinkAlt, FaDownload, FaTimes, FaEllipsisV, FaEdit, FaTrash } from 'react-icons/fa';
 import * as chatService from '../../services/chatService.jsx';
 
 /**
@@ -12,7 +12,7 @@ import * as chatService from '../../services/chatService.jsx';
  * @param {Function} props.onShare - Callback when share button is clicked
  * @param {boolean} props.showShareButton - Whether to show share button (default: true)
  */
-const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = true }) => {
+const MaterialCard = ({ material, onLike, onComment, onShare, onEdit, onDelete, showShareButton = true }) => {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -20,6 +20,7 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
   const [chatContacts, setChatContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [sharingTo, setSharingTo] = useState(null);
+  const [showOptions, setShowOptions] = useState(false);
 
   // Check if current user has liked this material
   const getCurrentUserId = () => {
@@ -32,6 +33,7 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
   };
   const currentUserId = getCurrentUserId();
   const isLiked = material.liked_by?.includes(currentUserId);
+  const isOwner = material.uploaded_by?._id === currentUserId;
 
   const handleLikeClick = () => {
     if (onLike) {
@@ -129,26 +131,75 @@ const MaterialCard = ({ material, onLike, onComment, onShare, showShareButton = 
     return 'LINK';
   };
 
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(material);
+    }
+    setShowOptions(false);
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure you want to delete this material?')) {
+      if (onDelete) {
+        onDelete(material._id);
+      }
+    }
+    setShowOptions(false);
+  };
+
   return (
     <>
       <div className="bg-white rounded-lg shadow-md p-6 mb-4 hover:shadow-lg transition-shadow">
       {/* Material Header - Uploader Info */}
-      <div className="flex items-center mb-4">
-        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
-          {material.uploaded_by?.name?.charAt(0).toUpperCase() || 'U'}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center">
+          <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
+            {material.uploaded_by?.name?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <div className="ml-3">
+            <p className="font-semibold text-gray-900">
+              {material.uploaded_by?.name || 'Unknown User'}
+            </p>
+            <p className="text-sm text-gray-500">
+              {material.uploaded_by?.role && (
+                <span className="capitalize">{material.uploaded_by.role}</span>
+              )}
+              {' • '}
+              {new Date(material.createdAt).toLocaleDateString()}
+            </p>
+          </div>
         </div>
-        <div className="ml-3">
-          <p className="font-semibold text-gray-900">
-            {material.uploaded_by?.name || 'Unknown User'}
-          </p>
-          <p className="text-sm text-gray-500">
-            {material.uploaded_by?.role && (
-              <span className="capitalize">{material.uploaded_by.role}</span>
+        
+        {/* Options Menu for Owner */}
+        {isOwner && (
+          <div className="relative">
+            <button
+              onClick={() => setShowOptions(!showOptions)}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <FaEllipsisV size={16} />
+            </button>
+            
+            {showOptions && (
+              <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                <button
+                  onClick={handleEdit}
+                  className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                >
+                  <FaEdit size={12} />
+                  Edit
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                >
+                  <FaTrash size={12} />
+                  Delete
+                </button>
+              </div>
             )}
-            {' • '}
-            {new Date(material.createdAt).toLocaleDateString()}
-          </p>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Material Title */}

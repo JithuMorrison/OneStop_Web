@@ -3,21 +3,22 @@ import React, { useState } from 'react';
 import { FaImage, FaTimes, FaHashtag } from 'react-icons/fa';
 
 /**
- * PostForm component for creating new posts
+ * PostForm component for creating and editing posts
  * @param {Object} props
  * @param {Function} props.onSubmit - Callback when form is submitted
  * @param {Function} props.onCancel - Callback when form is cancelled
  * @param {boolean} props.isSubmitting - Whether form is currently submitting
+ * @param {Object} props.initialData - Initial form data for editing
  */
-const PostForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
+const PostForm = ({ onSubmit, onCancel, isSubmitting = false, initialData = null }) => {
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    visibility: 'everyone',
-    hashtags: ''
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    visibility: initialData?.visibility || 'everyone',
+    hashtags: initialData?.hashtags ? initialData.hashtags.join(', ') : ''
   });
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreview, setImagePreview] = useState(initialData?.image || null);
   const [errors, setErrors] = useState({});
 
   const handleInputChange = (e) => {
@@ -117,7 +118,9 @@ const PostForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Post</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+        {initialData ? 'Edit Post' : 'Create New Post'}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Title Input */}
@@ -272,7 +275,7 @@ const PostForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
             disabled={isSubmitting}
             className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? 'Creating Post...' : 'Create Post'}
+            {isSubmitting ? (initialData ? 'Updating Post...' : 'Creating Post...') : (initialData ? 'Update Post' : 'Create Post')}
           </button>
           
           {onCancel && (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaHeart, FaRegHeart, FaComment, FaUserCircle, FaCalendarAlt, FaShare, FaTimes } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaComment, FaUserCircle, FaCalendarAlt, FaShare, FaTimes, FaEllipsisV, FaEdit, FaTrash } from 'react-icons/fa';
 import * as chatService from '../../services/chatService.jsx';
 
 /**
@@ -18,6 +18,8 @@ const AnnouncementCard = ({
   onComment, 
   onRegister,
   onShare,
+  onEdit,
+  onDelete,
   currentUserId,
   canEdit = false
 }) => {
@@ -30,6 +32,7 @@ const AnnouncementCard = ({
   const [chatContacts, setChatContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [sharingTo, setSharingTo] = useState(null);
+  const [showOptions, setShowOptions] = useState(false);
 
   if (!announcement) {
     return null;
@@ -55,6 +58,7 @@ const AnnouncementCard = ({
   const isLiked = liked_by.includes(currentUserId);
   const creatorName = created_by?.name || 'Unknown';
   const creatorRole = created_by?.role || '';
+  const isOwner = created_by?._id === currentUserId;
 
   const handleLike = () => {
     if (onLike) {
@@ -164,6 +168,22 @@ const AnnouncementCard = ({
     }
   };
 
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(announcement);
+    }
+    setShowOptions(false);
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure you want to delete this announcement?')) {
+      if (onDelete) {
+        onDelete(announcement._id);
+      }
+    }
+    setShowOptions(false);
+  };
+
   const formatDate = (date) => {
     if (!date) return '';
     return new Date(date).toLocaleDateString('en-US', {
@@ -235,21 +255,54 @@ const AnnouncementCard = ({
         )}
 
         {/* Creator Info */}
-        <div className="flex items-center text-gray-600 mb-4 pb-4 border-b">
-          <FaUserCircle className="text-2xl mr-2" />
-          <div>
-            <p className="text-sm font-medium">
-              {creatorName}
-              {creatorRole && (
-                <span className="ml-2 text-xs text-gray-500">
-                  ({creatorRole})
-                </span>
-              )}
-            </p>
-            <p className="text-xs text-gray-500">
-              {formatDate(createdAt)}
-            </p>
+        <div className="flex items-center justify-between text-gray-600 mb-4 pb-4 border-b">
+          <div className="flex items-center">
+            <FaUserCircle className="text-2xl mr-2" />
+            <div>
+              <p className="text-sm font-medium">
+                {creatorName}
+                {creatorRole && (
+                  <span className="ml-2 text-xs text-gray-500">
+                    ({creatorRole})
+                  </span>
+                )}
+              </p>
+              <p className="text-xs text-gray-500">
+                {formatDate(createdAt)}
+              </p>
+            </div>
           </div>
+          
+          {/* Options Menu for Owner */}
+          {isOwner && (
+            <div className="relative">
+              <button
+                onClick={() => setShowOptions(!showOptions)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <FaEllipsisV size={16} />
+              </button>
+              
+              {showOptions && (
+                <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                  <button
+                    onClick={handleEdit}
+                    className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                  >
+                    <FaEdit size={12} />
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                  >
+                    <FaTrash size={12} />
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Registration Section */}

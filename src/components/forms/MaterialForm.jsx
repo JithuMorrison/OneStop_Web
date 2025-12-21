@@ -3,18 +3,19 @@ import React, { useState } from 'react';
 import { FaFileUpload, FaTimes, FaLink } from 'react-icons/fa';
 
 /**
- * MaterialForm component for uploading new materials
+ * MaterialForm component for uploading and editing materials
  * @param {Object} props
  * @param {Function} props.onSubmit - Callback when form is submitted
  * @param {Function} props.onCancel - Callback when form is cancelled
  * @param {boolean} props.isSubmitting - Whether form is currently submitting
+ * @param {Object} props.initialData - Initial form data for editing
  */
-const MaterialForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
+const MaterialForm = ({ onSubmit, onCancel, isSubmitting = false, initialData = null }) => {
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    external_link: '',
-    uploadType: 'file' // 'file' or 'link'
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    external_link: initialData?.external_link || '',
+    uploadType: initialData?.file_url ? 'file' : (initialData?.external_link ? 'link' : 'file')
   });
   const [file, setFile] = useState(null);
   const [errors, setErrors] = useState({});
@@ -117,7 +118,9 @@ const MaterialForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Material</h2>
+      <h2 className="text-2xl font-bold text-gray-900 mb-6">
+        {initialData ? 'Edit Material' : 'Upload Material'}
+      </h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Title Input */}
@@ -295,7 +298,7 @@ const MaterialForm = ({ onSubmit, onCancel, isSubmitting = false }) => {
             disabled={isSubmitting}
             className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            {isSubmitting ? 'Uploading Material...' : 'Upload Material'}
+            {isSubmitting ? (initialData ? 'Updating Material...' : 'Uploading Material...') : (initialData ? 'Update Material' : 'Upload Material')}
           </button>
           
           {onCancel && (

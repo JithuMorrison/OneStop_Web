@@ -1,6 +1,6 @@
 // src/components/shared/PostCard.jsx
 import React, { useState, useEffect } from 'react';
-import { FaHeart, FaRegHeart, FaComment, FaShare, FaHashtag, FaTimes } from 'react-icons/fa';
+import { FaHeart, FaRegHeart, FaComment, FaShare, FaHashtag, FaTimes, FaEllipsisV, FaEdit, FaTrash } from 'react-icons/fa';
 import * as chatService from '../../services/chatService.jsx';
 
 /**
@@ -12,7 +12,7 @@ import * as chatService from '../../services/chatService.jsx';
  * @param {Function} props.onShare - Callback when share button is clicked
  * @param {boolean} props.showShareButton - Whether to show share button (default: true)
  */
-const PostCard = ({ post, onLike, onComment, onShare, showShareButton = true }) => {
+const PostCard = ({ post, onLike, onComment, onShare, onEdit, onDelete, showShareButton = true }) => {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
@@ -20,6 +20,7 @@ const PostCard = ({ post, onLike, onComment, onShare, showShareButton = true }) 
   const [chatContacts, setChatContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [sharingTo, setSharingTo] = useState(null);
+  const [showOptions, setShowOptions] = useState(false);
 
   // Check if current user has liked this post
   const getCurrentUserId = () => {
@@ -32,6 +33,7 @@ const PostCard = ({ post, onLike, onComment, onShare, showShareButton = true }) 
   };
   const currentUserId = getCurrentUserId();
   const isLiked = post.liked_by?.includes(currentUserId);
+  const isOwner = post.created_by?._id === currentUserId;
 
   const handleLikeClick = () => {
     if (onLike) {
@@ -107,6 +109,22 @@ const PostCard = ({ post, onLike, onComment, onShare, showShareButton = true }) 
     }
   };
 
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit(post);
+    }
+    setShowOptions(false);
+  };
+
+  const handleDelete = () => {
+    if (confirm('Are you sure you want to delete this post?')) {
+      if (onDelete) {
+        onDelete(post._id);
+      }
+    }
+    setShowOptions(false);
+  };
+
   return (
     <>
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4 hover:shadow-lg transition-all card-hover">
@@ -127,6 +145,37 @@ const PostCard = ({ post, onLike, onComment, onShare, showShareButton = true }) 
             {new Date(post.createdAt).toLocaleDateString()}
           </p>
         </div>
+        
+        {/* Options Menu for Owner */}
+        {isOwner && (
+          <div className="relative">
+            <button
+              onClick={() => setShowOptions(!showOptions)}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <FaEllipsisV size={16} />
+            </button>
+            
+            {showOptions && (
+              <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                <button
+                  onClick={handleEdit}
+                  className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                >
+                  <FaEdit size={12} />
+                  Edit
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                >
+                  <FaTrash size={12} />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Post Title */}

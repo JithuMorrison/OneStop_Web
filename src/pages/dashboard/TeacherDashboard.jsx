@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/UserContext.jsx';
+import { userService } from '../../services/userService.jsx';
 import {
   FiCalendar,
   FiFileText,
@@ -48,6 +49,13 @@ const TeacherDashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+
+      // Update streak first (for users already logged in accessing dashboard)
+      try {
+        await userService.updateStreak();
+      } catch (streakError) {
+        console.log('Streak update failed:', streakError);
+      }
 
       // Fetch pending OD claims count
       const odResponse = await fetch(`http://localhost:5000/api/od-claims/teacher/${user._id}?status=pending`, {

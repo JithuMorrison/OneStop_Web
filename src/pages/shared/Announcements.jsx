@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FaPlus, FaFilter, FaTimes } from 'react-icons/fa';
 import AnnouncementCard from '../../components/shared/AnnouncementCard.jsx';
 import AnnouncementForm from '../../components/forms/AnnouncementForm.jsx';
@@ -9,6 +10,7 @@ import interactionService from '../../services/interactionService.jsx';
  * Announcements page for viewing and creating announcements
  */
 const Announcements = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [announcements, setAnnouncements] = useState([]);
   const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -40,6 +42,20 @@ const Announcements = () => {
     loadCurrentUser();
     loadAnnouncements();
   }, []);
+
+  // Check for edit parameter in URL
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && announcements.length > 0) {
+      const announcementToEdit = announcements.find(a => a._id === editId);
+      if (announcementToEdit) {
+        setEditingAnnouncement(announcementToEdit);
+        setShowEditForm(true);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [announcements, searchParams, setSearchParams]);
 
   useEffect(() => {
     filterAnnouncements();

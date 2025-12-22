@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/UserContext.jsx';
+import { userService } from '../../services/userService.jsx';
 import {
   FiUsers,
   FiBell,
@@ -48,6 +49,13 @@ const StudentDashboard = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+
+      // Update streak first (for users already logged in accessing dashboard)
+      try {
+        await userService.updateStreak();
+      } catch (streakError) {
+        console.log('Streak update failed:', streakError);
+      }
 
       // Fetch user data for streak
       const userResponse = await fetch(`http://localhost:5000/api/user/${user._id || user.id}`, {

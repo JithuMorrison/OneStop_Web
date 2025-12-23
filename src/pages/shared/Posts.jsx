@@ -1,5 +1,6 @@
 // src/pages/shared/Posts.jsx
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PostCard from '../../components/shared/PostCard.jsx';
 import PostForm from '../../components/forms/PostForm.jsx';
 import postService from '../../services/postService.jsx';
@@ -12,6 +13,7 @@ import { FaPlus, FaTimes, FaFilter, FaHashtag } from 'react-icons/fa';
  * Implements hashtag filtering, post creation, and sharing functionality
  */
 const Posts = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -31,6 +33,20 @@ const Posts = () => {
   useEffect(() => {
     fetchPosts();
   }, [selectedHashtags]);
+
+  // Check for edit parameter in URL
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && posts.length > 0) {
+      const postToEdit = posts.find(p => p._id === editId);
+      if (postToEdit) {
+        setEditingPost(postToEdit);
+        setShowEditForm(true);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [posts, searchParams, setSearchParams]);
 
   const fetchPosts = async () => {
     try {

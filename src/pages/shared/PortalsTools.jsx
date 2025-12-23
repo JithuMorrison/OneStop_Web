@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { FaPlus, FaTimes, FaExternalLinkAlt } from 'react-icons/fa';
-import { createPortal, getPortals, createTool, getTools } from '../../services/portalToolService.jsx';
+import { FaPlus, FaTimes, FaExternalLinkAlt, FaEllipsisV, FaEdit, FaTrash } from 'react-icons/fa';
+import { createPortal, getPortals, createTool, getTools, editPortal, deletePortal, editTool, deleteTool } from '../../services/portalToolService.jsx';
 
 /**
  * PortalsTools page - Display and manage portals and tools
@@ -12,6 +12,10 @@ const PortalsTools = () => {
   const [error, setError] = useState(null);
   const [showPortalForm, setShowPortalForm] = useState(false);
   const [showToolForm, setShowToolForm] = useState(false);
+  const [editingPortal, setEditingPortal] = useState(null);
+  const [editingTool, setEditingTool] = useState(null);
+  const [showPortalOptions, setShowPortalOptions] = useState(null);
+  const [showToolOptions, setShowToolOptions] = useState(null);
 
   // Get current user
   const userStr = localStorage.getItem('user');
@@ -98,6 +102,88 @@ const PortalsTools = () => {
     }
   };
 
+  // Portal edit/delete handlers
+  const handleEditPortal = (portal) => {
+    setEditingPortal(portal);
+    setPortalFormData({
+      title: portal.title,
+      description: portal.description,
+      external_link: portal.external_link
+    });
+    setShowPortalForm(true);
+    setShowPortalOptions(null);
+  };
+
+  const handleUpdatePortal = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setError(null);
+      await editPortal(editingPortal._id, portalFormData);
+      
+      setPortalFormData({ title: '', description: '', external_link: '' });
+      setShowPortalForm(false);
+      setEditingPortal(null);
+      await loadData();
+    } catch (err) {
+      setError(err.error || err.message || 'Failed to update portal');
+    }
+  };
+
+  const handleDeletePortal = async (portalId) => {
+    if (!confirm('Are you sure you want to delete this portal?')) return;
+    
+    try {
+      setError(null);
+      await deletePortal(portalId);
+      setShowPortalOptions(null);
+      await loadData();
+    } catch (err) {
+      setError(err.error || err.message || 'Failed to delete portal');
+    }
+  };
+
+  // Tool edit/delete handlers
+  const handleEditTool = (tool) => {
+    setEditingTool(tool);
+    setToolFormData({
+      title: tool.title,
+      description: tool.description,
+      external_link: tool.external_link
+    });
+    setShowToolForm(true);
+    setShowToolOptions(null);
+  };
+
+  const handleUpdateTool = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setError(null);
+      await editTool(editingTool._id, toolFormData);
+      
+      setToolFormData({ title: '', description: '', external_link: '' });
+      setShowToolForm(false);
+      setEditingTool(null);
+      await loadData();
+    } catch (err) {
+      setError(err.error || err.message || 'Failed to update tool');
+    }
+  };
+
+  const handleDeleteTool = async (toolId) => {
+    if (!confirm('Are you sure you want to delete this tool?')) return;
+    
+    try {
+      setError(null);
+      await deleteTool(toolId);
+      setShowToolOptions(null);
+      await loadData();
+    } catch (err) {
+      setError(err.error || err.message || 'Failed to delete tool');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -145,7 +231,7 @@ const PortalsTools = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreatePortal} className="space-y-4">
+            <form onSubmit={editingPortal ? handleUpdatePortal : handleCreatePortal} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Title *
@@ -191,12 +277,13 @@ const PortalsTools = () => {
                   type="submit"
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Create Portal
+                  {editingPortal ? 'Update Portal' : 'Create Portal'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowPortalForm(false);
+                    setEditingPortal(null);
                     setPortalFormData({ title: '', description: '', external_link: '' });
                   }}
                   className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors"
@@ -221,9 +308,50 @@ const PortalsTools = () => {
             portals.map((portal) => (
               <div
                 key={portal._id}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative"
+                onClick={() => setShowPortalOptions(null)}
               >
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                {/* Admin Options Menu */}
+                {isAdmin && (
+                  <div className="absolute top-4 right-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPortalOptions(showPortalOptions === portal._id ? null : portal._id);
+                      }}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      <FaEllipsisV size={16} />
+                    </button>
+                    
+                    {showPortalOptions === portal._id && (
+                      <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditPortal(portal);
+                          }}
+                          className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                        >
+                          <FaEdit size={12} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePortal(portal._id);
+                          }}
+                          className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                        >
+                          <FaTrash size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <h3 className="text-xl font-semibold text-gray-800 mb-2 pr-8">
                   {portal.title}
                 </h3>
                 <p className="text-gray-600 mb-4">
@@ -273,7 +401,7 @@ const PortalsTools = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateTool} className="space-y-4">
+            <form onSubmit={editingTool ? handleUpdateTool : handleCreateTool} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Title *
@@ -319,12 +447,13 @@ const PortalsTools = () => {
                   type="submit"
                   className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  Create Tool
+                  {editingTool ? 'Update Tool' : 'Create Tool'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowToolForm(false);
+                    setEditingTool(null);
                     setToolFormData({ title: '', description: '', external_link: '' });
                   }}
                   className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition-colors"
@@ -349,9 +478,50 @@ const PortalsTools = () => {
             tools.map((tool) => (
               <div
                 key={tool._id}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative"
+                onClick={() => setShowToolOptions(null)}
               >
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                {/* Admin Options Menu */}
+                {isAdmin && (
+                  <div className="absolute top-4 right-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowToolOptions(showToolOptions === tool._id ? null : tool._id);
+                      }}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      <FaEllipsisV size={16} />
+                    </button>
+                    
+                    {showToolOptions === tool._id && (
+                      <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditTool(tool);
+                          }}
+                          className="w-full px-3 py-2 text-left text-blue-600 hover:bg-blue-50 rounded-t-lg flex items-center gap-2 text-sm"
+                        >
+                          <FaEdit size={12} />
+                          Edit
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTool(tool._id);
+                          }}
+                          className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2 text-sm border-t border-gray-100"
+                        >
+                          <FaTrash size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <h3 className="text-xl font-semibold text-gray-800 mb-2 pr-8">
                   {tool.title}
                 </h3>
                 <p className="text-gray-600 mb-4">

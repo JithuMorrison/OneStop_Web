@@ -1,5 +1,6 @@
 // src/pages/shared/Materials.jsx
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import MaterialCard from '../../components/shared/MaterialCard.jsx';
 import MaterialForm from '../../components/forms/MaterialForm.jsx';
 import materialService from '../../services/materialService.jsx';
@@ -12,6 +13,7 @@ import { FaPlus, FaTimes } from 'react-icons/fa';
  * Implements material upload, sharing functionality
  */
 const Materials = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -29,6 +31,20 @@ const Materials = () => {
   useEffect(() => {
     fetchMaterials();
   }, []);
+
+  // Check for edit parameter in URL
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    if (editId && materials.length > 0) {
+      const materialToEdit = materials.find(m => m._id === editId);
+      if (materialToEdit) {
+        setEditingMaterial(materialToEdit);
+        setShowEditForm(true);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [materials, searchParams, setSearchParams]);
 
   const fetchMaterials = async () => {
     try {

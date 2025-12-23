@@ -272,20 +272,14 @@ const Profile = () => {
   };
 
   const handleEdit = (content, contentType) => {
-    // For now, we'll show an alert since Profile page doesn't have inline edit forms
-    // In a real implementation, you might want to redirect to the respective edit pages
-    // or implement modal-based editing
-    alert(`Edit functionality for "${content.title}" - This would redirect to the ${contentType} edit page or open a modal`);
-    console.log('Edit:', content, contentType);
-    
-    // Example: You could redirect to the respective pages for editing
-    // if (contentType === 'post') {
-    //   navigate('/posts?edit=' + content._id);
-    // } else if (contentType === 'announcement') {
-    //   navigate('/announcements?edit=' + content._id);
-    // } else if (contentType === 'material') {
-    //   navigate('/materials?edit=' + content._id);
-    // }
+    // Navigate to the respective pages with edit parameter
+    if (contentType === 'post') {
+      navigate('/posts?edit=' + content._id);
+    } else if (contentType === 'announcement') {
+      navigate('/announcements?edit=' + content._id);
+    } else if (contentType === 'material') {
+      navigate('/materials?edit=' + content._id);
+    }
   };
 
   const handleDelete = async (contentId, contentType) => {

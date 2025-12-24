@@ -65,7 +65,8 @@ export const clubService = {
    * Create new club (admin only)
    * @param {Object} clubData - Club data
    * @param {string} clubData.name - Club name
-   * @param {File} clubData.logoFile - Logo file to upload
+   * @param {File} clubData.logoFile - Logo file to upload (optional if logoUrl provided)
+   * @param {string} clubData.logoUrl - Direct logo URL (optional if logoFile provided)
    * @param {string} clubData.description - Club description
    * @param {string[]} clubData.subdomains - Optional subdomains
    * @param {Array<{email: string, type: 'teacher'|'student'}>} clubData.moderators - Moderators
@@ -73,15 +74,20 @@ export const clubService = {
    */
   createClub: async (clubData) => {
     try {
-      const { name, logoFile, description, subdomains, moderators } = clubData;
+      const { name, logoFile, logoUrl, description, subdomains, moderators } = clubData;
 
       // Validate required fields
-      if (!name || !logoFile || !description || !moderators) {
-        throw new Error('Name, logo, description, and moderators are required');
+      if (!name || (!logoFile && !logoUrl) || !description || !moderators) {
+        throw new Error('Name, logo (file or URL), description, and moderators are required');
       }
 
-      // Upload logo to Supabase Storage
-      const logoUrl = await clubService.uploadLogo(logoFile);
+      // Get logo URL - either upload file or use provided URL
+      let finalLogoUrl;
+      if (logoFile) {
+        finalLogoUrl = await clubService.uploadLogo(logoFile);
+      } else {
+        finalLogoUrl = logoUrl;
+      }
 
       // Get token
       const token = localStorage.getItem('token');
@@ -94,7 +100,7 @@ export const clubService = {
         `${API_URL}/clubs`,
         {
           name,
-          logo: logoUrl,
+          logo: finalLogoUrl,
           description,
           subdomains: subdomains || [],
           moderators
@@ -109,6 +115,35 @@ export const clubService = {
       return response.data.club;
     } catch (error) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create club';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete club (admin only)
+   * @param {string} clubId - Club ID
+   * @returns {Promise<void>}
+   */
+  deleteClub: async (clubId) => {
+    try {
+      if (!clubId) {
+        throw new Error('Club ID is required');
+      }
+
+      // Get token
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Call backend API
+      await axios.delete(`${API_URL}/clubs/${clubId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete club';
       throw new Error(errorMessage);
     }
   },

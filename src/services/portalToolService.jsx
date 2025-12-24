@@ -74,9 +74,71 @@ export const getTools = async () => {
   }
 };
 
+// Edit portal (admin only)
+export const editPortal = async (portalId, portalData) => {
+  try {
+    const response = await axios.put(
+      `${API_URL}/portals/${portalId}`,
+      portalData,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Edit portal error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+// Delete portal (admin only)
+export const deletePortal = async (portalId) => {
+  try {
+    const response = await axios.delete(
+      `${API_URL}/portals/${portalId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Delete portal error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+// Edit tool (admin only)
+export const editTool = async (toolId, toolData) => {
+  try {
+    const response = await axios.put(
+      `${API_URL}/tools/${toolId}`,
+      toolData,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Edit tool error:', error);
+    throw error.response?.data || error;
+  }
+};
+
+// Delete tool (admin only)
+export const deleteTool = async (toolId) => {
+  try {
+    const response = await axios.delete(
+      `${API_URL}/tools/${toolId}`,
+      { headers: getAuthHeaders() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Delete tool error:', error);
+    throw error.response?.data || error;
+  }
+};
+
 export default {
   createPortal,
   getPortals,
+  editPortal,
+  deletePortal,
   createTool,
-  getTools
+  getTools,
+  editTool,
+  deleteTool
 };

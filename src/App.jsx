@@ -13,21 +13,27 @@ import NotFound from './pages/NotFound.jsx';
 import Layout from './components/layout/Layout.jsx';
 import ErrorBoundary from './components/shared/ErrorBoundary.jsx';
 import LoadingPage from './components/shared/LoadingPage.jsx';
+import Search from './search';
 
 // New role-based dashboard components
 import StudentDashboard from './pages/dashboard/StudentDashboard.jsx';
 import TeacherDashboard from './pages/dashboard/TeacherDashboard.jsx';
 import AdminDashboardNew from './pages/dashboard/AdminDashboard.jsx';
 
+// Admin pages
+import ManageUsers from './pages/admin/ManageUsers.jsx';
+
 // Shared pages
 import Clubs from './pages/shared/Clubs.jsx';
 import Announcements from './pages/shared/Announcements.jsx';
+import Events from './pages/shared/Events.jsx';
 import Posts from './pages/shared/Posts.jsx';
 import Profile from './pages/shared/Profile.jsx';
 import ODClaim from './pages/shared/ODClaim.jsx';
 import CalendarEvents from './pages/shared/CalendarEvents.jsx';
 import PortalsTools from './pages/shared/PortalsTools.jsx';
 import Query from './pages/shared/Query.jsx';
+import GroupChat from './pages/shared/GroupChat.jsx';
 
 const App = () => {
   const { user, isAuthenticated, loading } = useAuth();
@@ -98,6 +104,14 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
+            <Route 
+              path="/admin/users" 
+              element={
+                <ProtectedRoute allowedRoles="admin">
+                  <ManageUsers />
+                </ProtectedRoute>
+              } 
+            />
 
             {/* Legacy dashboard route - redirect to role-based */}
             <Route 
@@ -126,7 +140,7 @@ const App = () => {
             <Route 
               path="/clubs" 
               element={
-                <ProtectedRoute allowedRoles={['student', 'teacher']}>
+                <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
                   <Clubs />
                 </ProtectedRoute>
               } 
@@ -134,16 +148,32 @@ const App = () => {
             <Route 
               path="/announcements" 
               element={
-                <ProtectedRoute allowedRoles={['student', 'teacher']}>
+                <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
                   <Announcements />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/events" 
+              element={
+                <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
+                  <Events />
                 </ProtectedRoute>
               } 
             />
             <Route 
               path="/posts" 
               element={
-                <ProtectedRoute allowedRoles={['student', 'teacher']}>
+                <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
                   <Posts />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/group-chat" 
+              element={
+                <ProtectedRoute allowedRoles={['student', 'teacher', 'admin']}>
+                  <GroupChat />
                 </ProtectedRoute>
               } 
             />
@@ -174,6 +204,11 @@ const App = () => {
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:id" element={<Profile />} />
           </Route>
+
+          <Route 
+            path="/search" 
+            element={isAuthenticated ? <Search /> : <Navigate to="/login" />} 
+          />
 
           {/* Root Route */}
           <Route 
